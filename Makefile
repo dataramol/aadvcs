@@ -6,3 +6,7 @@ run:
 	
 test:
 	go test -v ./...
+
+.PHONY: build-cli
+build-cli:
+	go build -o aadvcs.exe main.go
