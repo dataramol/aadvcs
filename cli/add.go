@@ -37,7 +37,7 @@ func runAddCommand(stagingAreaFilePath string, filePaths []string) error {
 
 	prepareStagingArea(filePaths, metadata)
 
-	statusFilePtr, _ := createOrOpenFileRWMode(stagingAreaFilePath)
+	statusFilePtr, _ := createOrOpenFileRWMode(statusFile)
 	defer statusFilePtr.Close()
 
 	stagingFilePtr, _ := CreateOrOpenFileAppendMode(stagingAreaFilePath)

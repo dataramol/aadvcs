@@ -64,3 +64,11 @@ func extractFileMetadataFromLine(lineStr string) models.FileMetaData {
 		Status:           models.FileStatus(structure[2]),
 	}
 }
+
+func getNumberOfChildrenDir(path string) (int, error) {
+	files, err := os.ReadDir(path)
+	if err != nil {
+		return 0, err
+	}
+	return len(files), nil
+}
