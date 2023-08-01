@@ -76,3 +76,13 @@ func (lwwgraph *LastWriterWinsGraph) PrintGraph() {
 		fmt.Println()
 	}
 }
+
+func (lwwgraph *LastWriterWinsGraph) GetVertexByValue(targetValue interface{}) *Vertex {
+	for _, vertex := range lwwgraph.Vertices {
+		if vertex.Value == targetValue {
+			return vertex
+		}
+	}
+
+	return nil
+}

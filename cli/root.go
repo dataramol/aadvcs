@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/spf13/cobra"
@@ -13,7 +12,6 @@ var rootCmd = &cobra.Command{
 }
 
 func Execute() {
-	fmt.Println("In Root Execute")
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatalf("Failed to execute command. Reason : %v", err)
 	}

@@ -3,6 +3,7 @@ package cli
 import (
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/dataramol/aadvcs/models"
@@ -71,4 +72,11 @@ func getNumberOfChildrenDir(path string) (int, error) {
 		return 0, err
 	}
 	return len(files), nil
+}
+
+func createNestedFile(p string) (*os.File, error) {
+	if err := os.MkdirAll(filepath.Dir(p), os.ModePerm); err != nil {
+		return nil, err
+	}
+	return os.Create(p)
 }
