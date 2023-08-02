@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/spf13/cobra"
@@ -62,6 +63,17 @@ func runCommitCommand(trackedFilePath, msg string) error {
 	defer stagingFilePtr.Close()
 
 	err = clearFileContent(stagingFilePtr)
+
+	err, lwwGraph = createLWWGraph()
+
+	if lwwGraph != nil {
+		fp, err := createNestedFile(filepath.Join(newCommitDirName, "graph.json"))
+		if err != nil {
+			jsonData, _ := json.MarshalIndent(lwwGraph, "", "")
+			_, _ = fp.Write(jsonData)
+			fp.Close()
+		}
+	}
 
 	return nil
 }

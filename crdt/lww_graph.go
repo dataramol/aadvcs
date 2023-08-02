@@ -86,3 +86,12 @@ func (lwwgraph *LastWriterWinsGraph) GetVertexByValue(targetValue interface{}) *
 
 	return nil
 }
+
+func (lwwgraph *LastWriterWinsGraph) EdgeExists(from string, to string) bool {
+	for _, edge := range lwwgraph.Edges {
+		if edge.From == from && edge.To == to {
+			return true
+		}
+	}
+	return false
+}

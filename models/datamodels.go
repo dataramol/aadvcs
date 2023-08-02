@@ -9,7 +9,6 @@ type CommitModel struct {
 }
 
 type Tree struct {
-	FileMode string
 	FileName string
 }
 

@@ -9,7 +9,6 @@ import (
 func TestLWWGraph(t *testing.T) {
 	lwwGraph := NewLastWriterWinsGraph("Node1")
 	val1 := models.Tree{
-		FileMode: "R",
 		FileName: "dir",
 	}
 	val2 := models.Blob{
@@ -17,7 +16,6 @@ func TestLWWGraph(t *testing.T) {
 		FileName: "file1.txt",
 	}
 	val3 := models.Tree{
-		FileMode: "R",
 		FileName: "lib",
 	}
 	val4 := models.Blob{
