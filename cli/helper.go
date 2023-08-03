@@ -1,11 +1,11 @@
 package cli
 
 import (
-	"bufio"
 	"github.com/dataramol/aadvcs/crdt"
 	"github.com/dataramol/aadvcs/models"
 	"github.com/fatih/color"
 	"github.com/google/uuid"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -62,15 +62,16 @@ func createVerticesInGraph(items []string, originalPath string) {
 	model := models.Blob{
 		FileName: filepath.Base(originalPath),
 	}
-	if lwwGraph.GetVertexByValue(model) != nil {
-		filePtr, err := createOrOpenFileRWMode(originalPath)
-		if err == nil {
+	if lwwGraph.GetVertexByValue(model) == nil {
+		//filePtr, err := createOrOpenFileRWMode(originalPath)
+		fileContent, err := os.ReadFile(originalPath)
+		if err != nil {
 			color.Red("Error for path %v -> ######### %v", originalPath, err)
 		}
-		fileScanner := bufio.NewScanner(filePtr)
-		model.Content = string(fileScanner.Bytes())
+		//fileScanner := bufio.NewScanner(filePtr)
+		color.Yellow("Content --> %v", string(fileContent))
+		model.Content = string(fileContent)
 		lwwGraph.AddVertex(model, uuid.NewString())
-		filePtr.Close()
 	}
 }
 
