@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"io"
 	"os"
@@ -62,18 +63,20 @@ func runCommitCommand(trackedFilePath, msg string) error {
 	stagingFilePtr, _ := createOrOpenFileRWMode(stagingAreaFile)
 	defer stagingFilePtr.Close()
 
-	err = clearFileContent(stagingFilePtr)
-
 	err, lwwGraph = createLWWGraph()
 
 	if lwwGraph != nil {
 		fp, err := createNestedFile(filepath.Join(newCommitDirName, "graph.json"))
-		if err != nil {
+		lwwGraph.PrintGraph()
+		if err == nil {
 			jsonData, _ := json.MarshalIndent(lwwGraph, "", "")
+			color.Magenta("%v", string(jsonData))
 			_, _ = fp.Write(jsonData)
 			fp.Close()
 		}
 	}
+
+	err = clearFileContent(stagingFilePtr)
 
 	return nil
 }

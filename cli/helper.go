@@ -4,20 +4,20 @@ import (
 	"bufio"
 	"github.com/dataramol/aadvcs/crdt"
 	"github.com/dataramol/aadvcs/models"
+	"github.com/fatih/color"
 	"github.com/google/uuid"
 	"path/filepath"
 	"strings"
 )
 
-var lwwGraph *crdt.LastWriterWinsGraph
+var lwwGraph = crdt.NewLastWriterWinsGraph("node1")
 
 func createLWWGraph() (error, *crdt.LastWriterWinsGraph) {
 	noOfCommits, err := getNumberOfChildrenDir(aadvcsCommitDirPath)
 	if err != nil {
 		return err, nil
 	}
-
-	if noOfCommits == 0 {
+	if noOfCommits == 1 {
 		err := createGraphForFirstCommit()
 		if err != nil {
 			return err, nil
@@ -41,8 +41,10 @@ func createGraphForFirstCommit() error {
 
 	for _, file := range metadata {
 		files := strings.Split(file.Path, "\\")
-		createEdgesinGraph(files)
+		createEdgesInGraph(files)
 	}
+
+	lwwGraph.PrintGraph()
 
 	return nil
 }
@@ -52,7 +54,7 @@ func createVerticesInGraph(items []string, originalPath string) {
 		model := models.Tree{
 			FileName: items[i],
 		}
-		if lwwGraph.GetVertexByValue(model) != nil {
+		if lwwGraph.GetVertexByValue(model) == nil {
 			lwwGraph.AddVertex(model, uuid.NewString())
 		}
 	}
@@ -61,7 +63,10 @@ func createVerticesInGraph(items []string, originalPath string) {
 		FileName: filepath.Base(originalPath),
 	}
 	if lwwGraph.GetVertexByValue(model) != nil {
-		filePtr, _ := createOrOpenFileRWMode(originalPath)
+		filePtr, err := createOrOpenFileRWMode(originalPath)
+		if err == nil {
+			color.Red("Error for path %v -> ######### %v", originalPath, err)
+		}
 		fileScanner := bufio.NewScanner(filePtr)
 		model.Content = string(fileScanner.Bytes())
 		lwwGraph.AddVertex(model, uuid.NewString())
@@ -69,8 +74,9 @@ func createVerticesInGraph(items []string, originalPath string) {
 	}
 }
 
-func createEdgesinGraph(items []string) {
+func createEdgesInGraph(items []string) {
 	for from, to := 0, 1; to < len(items); from, to = from+1, to+1 {
+		color.Red("%v %v %v %v", from, to, len(items), items)
 		if !lwwGraph.EdgeExists(items[from], items[to]) {
 			lwwGraph.AddEdge(items[to], items[from], uuid.NewString())
 		}

@@ -2,6 +2,8 @@ package crdt
 
 import (
 	"fmt"
+	"github.com/dataramol/aadvcs/models"
+	"github.com/fatih/color"
 	"sync"
 
 	"github.com/dataramol/aadvcs/clock"
@@ -62,16 +64,19 @@ func (lwwgraph *LastWriterWinsGraph) AddEdge(To string, From string, Id string) 
 	}
 
 	lwwgraph.Edges[edge.Id] = &edge
-	srcVtx := lwwgraph.Vertices[From]
+	srcVtx := lwwgraph.GetVertexByValue(models.Tree{
+		FileName: From,
+	})
+
 	srcVtx.AdjacentVertices = append(srcVtx.AdjacentVertices, To)
 }
 
 func (lwwgraph *LastWriterWinsGraph) PrintGraph() {
 	fmt.Println("*****Printing Graph*****")
-	for id, v := range lwwgraph.Vertices {
-		fmt.Printf("Vertex is %v :-> ", id)
+	for _, v := range lwwgraph.Vertices {
+		color.Green("Vertex is %v :-> ", v)
 		for _, adjVtx := range v.AdjacentVertices {
-			fmt.Printf("Adjacent Vertex : %v\t", adjVtx)
+			color.Yellow("Adjacent Vertex : %v\t", adjVtx)
 		}
 		fmt.Println()
 	}
