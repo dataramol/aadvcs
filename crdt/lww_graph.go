@@ -9,71 +9,72 @@ import (
 	"github.com/dataramol/aadvcs/clock"
 )
 
+type ModelType int
+
+const (
+	Tree ModelType = iota
+	Blob
+	Commit
+)
+
 type Vertex struct {
-	Id               string
 	Value            interface{}
-	AdjacentVertices []string
+	AdjacentVertices []*Vertex
+	ModType          ModelType
 }
 
 type Edge struct {
-	Id   string
-	From string
-	To   string
+	From *Vertex
+	To   *Vertex
 }
 
 type LastWriterWinsGraph struct {
 	NodeId   string
-	Vertices map[string]*Vertex
-	Edges    map[string]*Edge
+	Vertices []*Vertex
+	Edges    []*Edge
 	Clock    *clock.VectorClock
 	mu       sync.Mutex
 }
 
 func NewLastWriterWinsGraph(nodeId string) *LastWriterWinsGraph {
 	return &LastWriterWinsGraph{
-		NodeId:   nodeId,
-		Vertices: make(map[string]*Vertex),
-		Edges:    make(map[string]*Edge),
-		Clock:    clock.NewVectorClock(nodeId),
+		NodeId: nodeId,
+		Clock:  clock.NewVectorClock(nodeId),
 	}
 }
 
-func (lwwgraph *LastWriterWinsGraph) IncrementClock() {
-	lwwgraph.Clock.Increment()
+func (lwwGraph *LastWriterWinsGraph) IncrementClock() {
+	lwwGraph.Clock.Increment()
 }
 
-func (lwwgraph *LastWriterWinsGraph) AddVertex(Val interface{}, Id string) {
-	lwwgraph.mu.Lock()
-	defer lwwgraph.mu.Unlock()
+func (lwwGraph *LastWriterWinsGraph) AddVertex(Val interface{}, ModType ModelType) {
+	lwwGraph.mu.Lock()
+	defer lwwGraph.mu.Unlock()
 
 	vertex := Vertex{
-		Id:    Id,
-		Value: Val,
+		Value:   Val,
+		ModType: ModType,
 	}
-	lwwgraph.Vertices[vertex.Id] = &vertex
+	lwwGraph.Vertices = append(lwwGraph.Vertices, &vertex)
 }
 
-func (lwwgraph *LastWriterWinsGraph) AddEdge(To string, From string, Id string) {
-	lwwgraph.mu.Lock()
-	defer lwwgraph.mu.Unlock()
+func (lwwGraph *LastWriterWinsGraph) AddEdge(To *Vertex, From *Vertex) {
+	lwwGraph.mu.Lock()
+	defer lwwGraph.mu.Unlock()
 
 	edge := Edge{
-		Id:   Id,
 		From: From,
 		To:   To,
 	}
 
-	lwwgraph.Edges[edge.Id] = &edge
-	srcVtx := lwwgraph.GetVertexByValue(models.Tree{
-		FileName: From,
-	})
+	lwwGraph.Edges = append(lwwGraph.Edges, &edge)
 
-	srcVtx.AdjacentVertices = append(srcVtx.AdjacentVertices, To)
+	From.AdjacentVertices = append(From.AdjacentVertices, To)
 }
 
-func (lwwgraph *LastWriterWinsGraph) PrintGraph() {
+func (lwwGraph *LastWriterWinsGraph) PrintGraph() {
 	fmt.Println("*****Printing Graph*****")
-	for _, v := range lwwgraph.Vertices {
+	for _, v := range lwwGraph.Vertices {
 		color.Green("Vertex is %v :-> ", v)
 		for _, adjVtx := range v.AdjacentVertices {
 			color.Yellow("Adjacent Vertex : %v\t", adjVtx)
@@ -82,9 +83,9 @@ func (lwwgraph *LastWriterWinsGraph) PrintGraph() {
 	}
 }
 
-func (lwwgraph *LastWriterWinsGraph) GetVertexByValue(targetValue interface{}) *Vertex {
-	for _, vertex := range lwwgraph.Vertices {
-		if vertex.Value == targetValue {
+func (lwwGraph *LastWriterWinsGraph) GetVertexByValue(targetValue interface{}, modType ModelType) *Vertex {
+	for _, vertex := range lwwGraph.Vertices {
+		if vertex.ModType == modType && vertex.Value == targetValue {
 			return vertex
 		}
 	}
@@ -92,8 +93,39 @@ func (lwwgraph *LastWriterWinsGraph) GetVertexByValue(targetValue interface{}) *
 	return nil
 }
 
-func (lwwgraph *LastWriterWinsGraph) EdgeExists(from string, to string) bool {
-	for _, edge := range lwwgraph.Edges {
+func (lwwGraph *LastWriterWinsGraph) GetVertexByFilePath(filePath string, modType ModelType) *Vertex {
+	/*var model interface{}
+	if modType == Blob {
+		model = models.Blob{
+			FileName: filePath,
+		}
+	} else if modType == Tree {
+		model = models.Tree{
+			FileName: filePath,
+		}
+	}*/
+
+	for _, vertex := range lwwGraph.Vertices {
+		/*if vertex.ModType == modType && vertex.Value == model {
+			return vertex
+		}*/
+
+		if modType == vertex.ModType && modType == Tree {
+			if vertex.Value.(models.Tree).FileName == filePath {
+				return vertex
+			}
+		} else if modType == vertex.ModType && modType == Blob {
+			if vertex.Value.(models.Blob).FileName == filePath {
+				return vertex
+			}
+		}
+	}
+
+	return nil
+}
+
+func (lwwGraph *LastWriterWinsGraph) EdgeExists(from *Vertex, to *Vertex) bool {
+	for _, edge := range lwwGraph.Edges {
 		if edge.From == from && edge.To == to {
 			return true
 		}
