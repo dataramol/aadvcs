@@ -63,7 +63,7 @@ func runCommitCommand(trackedFilePath, msg string) error {
 	stagingFilePtr, _ := createOrOpenFileRWMode(stagingAreaFile)
 	defer stagingFilePtr.Close()
 
-	err, lwwGraph = createLWWGraph()
+	err, lwwGraph = createLWWGraph(msg)
 
 	if lwwGraph != nil {
 		fp, err := createNestedFile(filepath.Join(newCommitDirName, "graph.json"))
