@@ -1,11 +1,9 @@
 package models
 
 type CommitModel struct {
-	Id           string
-	Author       string
-	Committer    string
-	CommitMsg    string
-	ParentCommit *CommitModel
+	CommitMsg     string
+	ParentCommit  *CommitModel
+	CommitVersion int
 }
 
 type Tree struct {

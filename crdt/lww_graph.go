@@ -94,21 +94,8 @@ func (lwwGraph *LastWriterWinsGraph) GetVertexByValue(targetValue interface{}, m
 }
 
 func (lwwGraph *LastWriterWinsGraph) GetVertexByFilePath(filePath string, modType ModelType) *Vertex {
-	/*var model interface{}
-	if modType == Blob {
-		model = models.Blob{
-			FileName: filePath,
-		}
-	} else if modType == Tree {
-		model = models.Tree{
-			FileName: filePath,
-		}
-	}*/
 
 	for _, vertex := range lwwGraph.Vertices {
-		/*if vertex.ModType == modType && vertex.Value == model {
-			return vertex
-		}*/
 
 		if modType == vertex.ModType && modType == Tree {
 			if vertex.Value.(models.Tree).FileName == filePath {
@@ -131,4 +118,26 @@ func (lwwGraph *LastWriterWinsGraph) EdgeExists(from *Vertex, to *Vertex) bool {
 		}
 	}
 	return false
+}
+
+func (lwwGraph *LastWriterWinsGraph) GetRootVertex() *Vertex {
+	vertexMap := make(map[*Vertex]bool)
+
+	for _, vertex := range lwwGraph.Vertices {
+		vertexMap[vertex] = false
+	}
+
+	for _, vertex := range lwwGraph.Vertices {
+		for _, adjVertex := range vertex.AdjacentVertices {
+			vertexMap[adjVertex] = true
+		}
+	}
+
+	for vertex, isNotRoot := range vertexMap {
+		if !isNotRoot {
+			return vertex
+		}
+	}
+
+	return nil
 }

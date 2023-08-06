@@ -11,13 +11,13 @@ import (
 
 var lwwGraph = crdt.NewLastWriterWinsGraph("node1")
 
-func createLWWGraph() (error, *crdt.LastWriterWinsGraph) {
+func createLWWGraph(commitMsg string) (error, *crdt.LastWriterWinsGraph) {
 	noOfCommits, err := getNumberOfChildrenDir(aadvcsCommitDirPath)
 	if err != nil {
 		return err, nil
 	}
 	if noOfCommits == 1 {
-		err := createGraphForFirstCommit()
+		err := createGraphForFirstCommit(commitMsg)
 		if err != nil {
 			return err, nil
 		}
@@ -27,7 +27,7 @@ func createLWWGraph() (error, *crdt.LastWriterWinsGraph) {
 	return nil, lwwGraph
 }
 
-func createGraphForFirstCommit() error {
+func createGraphForFirstCommit(commitMsg string) error {
 	metadata, err := createMetadataMap(stagingAreaFile)
 	if err != nil {
 		return err
@@ -43,7 +43,16 @@ func createGraphForFirstCommit() error {
 		createEdgesInGraph(files)
 	}
 
-	lwwGraph.PrintGraph()
+	rootDir := lwwGraph.GetRootVertex()
+
+	commitVertex := models.CommitModel{
+		CommitMsg:     commitMsg,
+		ParentCommit:  nil,
+		CommitVersion: 1,
+	}
+
+	lwwGraph.AddVertex(commitVertex, crdt.Commit)
+	lwwGraph.AddEdge(rootDir, lwwGraph.GetVertexByValue(commitVertex, crdt.Commit))
 
 	return nil
 }

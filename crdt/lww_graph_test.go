@@ -1,6 +1,7 @@
 package crdt
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/dataramol/aadvcs/models"
@@ -34,4 +35,19 @@ func TestLWWGraph(t *testing.T) {
 
 	lwwGraph.PrintGraph()
 
+	rootVtx := lwwGraph.GetRootVertex()
+
+	fmt.Printf("Root Vertex is %v", rootVtx)
+
+	commitModel := models.CommitModel{
+		CommitVersion: 1,
+		ParentCommit:  nil,
+		CommitMsg:     "test",
+	}
+
+	lwwGraph.AddVertex(commitModel, Commit)
+
+	lwwGraph.AddEdge(rootVtx, lwwGraph.GetVertexByValue(commitModel, Commit))
+
+	fmt.Printf("Root Vertex After Commit is %v", rootVtx)
 }
