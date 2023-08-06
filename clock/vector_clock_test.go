@@ -10,8 +10,8 @@ func TestVectorClock(t *testing.T) {
 	vc2 := NewVectorClock("node2")
 
 	//Initialise and setup node
-	vc1.AddNode(vc2.nodeId)
-	vc2.AddNode(vc1.nodeId)
+	vc1.AddNode(vc2.NodeId)
+	vc2.AddNode(vc1.NodeId)
 
 	vc1.Increment()
 	if !vc1.HappenedAfter(vc2) {

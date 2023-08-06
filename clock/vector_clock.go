@@ -5,10 +5,10 @@ import (
 	"sync"
 )
 
-// VectorClock represents the vector clock for a node in system.
+// VectorClock represents the vector Clock for a node in system.
 type VectorClock struct {
-	nodeId string
-	clock  map[string]int64
+	NodeId string
+	Clock  map[string]int64
 	mu     sync.Mutex
 }
 
@@ -22,21 +22,21 @@ const (
 	NotComparable
 )
 
-// NewVectorClock Creates new instance of vector clock
+// NewVectorClock Creates new instance of vector Clock
 func NewVectorClock(id string) *VectorClock {
 	clock := make(map[string]int64)
 	clock[id] = 0
 	return &VectorClock{
-		nodeId: id,
-		clock:  clock,
+		NodeId: id,
+		Clock:  clock,
 	}
 }
 
 func (v *VectorClock) AddNode(id string) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	if _, exists := v.clock[id]; !exists {
-		v.clock[id] = 0
+	if _, exists := v.Clock[id]; !exists {
+		v.Clock[id] = 0
 	}
 }
 
@@ -44,22 +44,22 @@ func (v *VectorClock) AddNode(id string) {
 func (v *VectorClock) Increment() {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	v.clock[v.nodeId]++
+	v.Clock[v.NodeId]++
 }
 
-// Merge merges the current vector clock with another vector clock
+// Merge merges the current vector Clock with another vector Clock
 func (v *VectorClock) Merge(other *VectorClock) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	for nodeId, counter := range other.clock {
-		if counter > v.clock[nodeId] {
-			v.clock[nodeId] = counter
+	for nodeId, counter := range other.Clock {
+		if counter > v.Clock[nodeId] {
+			v.Clock[nodeId] = counter
 		}
 	}
 }
 
 // Compare compares the two vector clocks and returns the ordering relationship
-// return relation of vector clock in argument with respect to current vector clock
+// return relation of vector Clock in argument with respect to current vector Clock
 // If method returns "HAPPENS_AFTER" that means , other happened after v
 // If method returns "HAPPENS_BEFORE" that means, other happened before v
 // other __________ v
@@ -67,12 +67,12 @@ func (v *VectorClock) Compare(other *VectorClock) Ordering {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	var ordering Ordering
-	if len(v.clock) != len(other.clock) {
+	if len(v.Clock) != len(other.Clock) {
 		return NotComparable
 	}
 
-	for node := range v.clock {
-		if _, exists := other.clock[node]; !exists {
+	for node := range v.Clock {
+		if _, exists := other.Clock[node]; !exists {
 			return NotComparable
 		}
 	}
@@ -81,9 +81,9 @@ func (v *VectorClock) Compare(other *VectorClock) Ordering {
 	vBeforeOther := false
 	concurrent := false
 
-	for node := range v.clock {
-		clock1 := v.clock[node]
-		clock2 := other.clock[node]
+	for node := range v.Clock {
+		clock1 := v.Clock[node]
+		clock2 := other.Clock[node]
 
 		if clock1 > clock2 {
 			vAfterOther = true
@@ -123,8 +123,8 @@ func (v *VectorClock) IsConcurrent(other *VectorClock) bool {
 }
 
 func (v *VectorClock) Print() {
-	fmt.Printf("Vector Clock at Node Id : %v\n", v.nodeId)
-	for nodeId, clock := range v.clock {
+	fmt.Printf("Vector Clock at Node Id : %v\n", v.NodeId)
+	for nodeId, clock := range v.Clock {
 		fmt.Printf("Clock for Node %v is %v\n", nodeId, clock)
 	}
 }

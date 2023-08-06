@@ -67,7 +67,7 @@ func runCommitCommand(trackedFilePath, msg string) error {
 
 	if lwwGraph != nil {
 		fp, err := createNestedFile(filepath.Join(newCommitDirName, "graph.json"))
-		lwwGraph.PrintGraph()
+		lwwGraph.IncrementClock()
 		if err == nil {
 			jsonData, _ := json.MarshalIndent(lwwGraph, "", "")
 			color.Magenta("%v", string(jsonData))
