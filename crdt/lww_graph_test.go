@@ -23,14 +23,14 @@ func TestLWWGraph(t *testing.T) {
 		FileName: "file2.txt",
 	}
 
-	lwwGraph.AddVertex(val1, "val1")
-	lwwGraph.AddVertex(val2, "val2")
-	lwwGraph.AddVertex(val3, "val3")
-	lwwGraph.AddVertex(val4, "val4")
+	lwwGraph.AddVertex(val1, Tree)
+	lwwGraph.AddVertex(val2, Blob)
+	lwwGraph.AddVertex(val3, Tree)
+	lwwGraph.AddVertex(val4, Blob)
 
-	lwwGraph.AddEdge("val2", "val1", "edge1")
-	lwwGraph.AddEdge("val3", "val1", "edge2")
-	lwwGraph.AddEdge("val4", "val3", "edge3")
+	lwwGraph.AddEdge(lwwGraph.GetVertexByFilePath("file1.txt", Blob), lwwGraph.GetVertexByFilePath("dir", Tree))
+	lwwGraph.AddEdge(lwwGraph.GetVertexByFilePath("lib", Tree), lwwGraph.GetVertexByFilePath("dir", Tree))
+	lwwGraph.AddEdge(lwwGraph.GetVertexByFilePath("file2.txt", Blob), lwwGraph.GetVertexByFilePath("lib", Tree))
 
 	lwwGraph.PrintGraph()
 
