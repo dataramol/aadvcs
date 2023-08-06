@@ -4,7 +4,6 @@ import (
 	"github.com/dataramol/aadvcs/crdt"
 	"github.com/dataramol/aadvcs/models"
 	"github.com/fatih/color"
-	"github.com/google/uuid"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,35 +50,41 @@ func createGraphForFirstCommit() error {
 
 func createVerticesInGraph(items []string, originalPath string) {
 	for i := 0; i < len(items)-1; i++ {
-		model := models.Tree{
-			FileName: items[i],
-		}
-		if lwwGraph.GetVertexByValue(model) == nil {
-			lwwGraph.AddVertex(model, uuid.NewString())
+		if lwwGraph.GetVertexByFilePath(items[i], crdt.Tree) == nil {
+			lwwGraph.AddVertex(models.Tree{
+				FileName: items[i],
+			}, crdt.Tree)
 		}
 	}
 
-	model := models.Blob{
-		FileName: filepath.Base(originalPath),
-	}
-	if lwwGraph.GetVertexByValue(model) == nil {
-		//filePtr, err := createOrOpenFileRWMode(originalPath)
+	if lwwGraph.GetVertexByFilePath(filepath.Base(originalPath), crdt.Blob) == nil {
 		fileContent, err := os.ReadFile(originalPath)
 		if err != nil {
 			color.Red("Error for path %v -> ######### %v", originalPath, err)
 		}
-		//fileScanner := bufio.NewScanner(filePtr)
-		color.Yellow("Content --> %v", string(fileContent))
-		model.Content = string(fileContent)
-		lwwGraph.AddVertex(model, uuid.NewString())
+		lwwGraph.AddVertex(models.Blob{
+			FileName: filepath.Base(originalPath),
+			Content:  string(fileContent),
+		}, crdt.Blob)
 	}
 }
 
 func createEdgesInGraph(items []string) {
 	for from, to := 0, 1; to < len(items); from, to = from+1, to+1 {
 		color.Red("%v %v %v %v", from, to, len(items), items)
-		if !lwwGraph.EdgeExists(items[from], items[to]) {
-			lwwGraph.AddEdge(items[to], items[from], uuid.NewString())
+
+		var ToVertex *crdt.Vertex
+		var FromVertex *crdt.Vertex
+
+		if to == len(items)-1 {
+			ToVertex = lwwGraph.GetVertexByFilePath(items[to], crdt.Blob)
+		} else {
+			ToVertex = lwwGraph.GetVertexByFilePath(items[to], crdt.Tree)
+		}
+		FromVertex = lwwGraph.GetVertexByFilePath(items[from], crdt.Tree)
+
+		if !lwwGraph.EdgeExists(FromVertex, ToVertex) {
+			lwwGraph.AddEdge(ToVertex, FromVertex)
 		}
 	}
 }
