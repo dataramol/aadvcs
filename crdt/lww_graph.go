@@ -58,6 +58,10 @@ func (lwwGraph *LastWriterWinsGraph) AddVertex(Val interface{}, ModType ModelTyp
 	lwwGraph.Vertices = append(lwwGraph.Vertices, &vertex)
 }
 
+func (lwwGraph *LastWriterWinsGraph) AddVtx(vtx *Vertex) {
+	lwwGraph.Vertices = append(lwwGraph.Vertices, vtx)
+}
+
 func (lwwGraph *LastWriterWinsGraph) AddEdge(To *Vertex, From *Vertex) {
 	lwwGraph.mu.Lock()
 	defer lwwGraph.mu.Unlock()

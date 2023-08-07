@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"encoding/json"
+	"fmt"
 	"github.com/dataramol/aadvcs/crdt"
 	"github.com/dataramol/aadvcs/models"
 	"github.com/fatih/color"
@@ -22,9 +24,92 @@ func createLWWGraph(commitMsg string) (error, *crdt.LastWriterWinsGraph) {
 			return err, nil
 		}
 	} else {
-
+		file, err := os.ReadFile(filepath.Join(aadvcsCommitDirPath, fmt.Sprintf("v%v", noOfCommits-1), "graph.json"))
+		if err != nil {
+			return err, nil
+		}
+		var prevCommitGraph *crdt.LastWriterWinsGraph
+		err = json.Unmarshal(file, prevCommitGraph)
+		if err != nil {
+			return err, nil
+		}
+		err = createGraphForNonFirstCommit(commitMsg, prevCommitGraph)
+		if err != nil {
+			return err, nil
+		}
 	}
 	return nil, lwwGraph
+}
+
+func createGraphForNonFirstCommit(commitMsg string, previousCommitGraph *crdt.LastWriterWinsGraph) error {
+	metadata, err := createMetadataMap(stagingAreaFile)
+	if err != nil {
+		return err
+	}
+
+	for _, file := range metadata {
+		files := strings.Split(file.Path, "\\")
+		createVerticesInGraph(files, file.Path)
+	}
+
+	for _, file := range metadata {
+		files := strings.Split(file.Path, "\\")
+		createEdgesInGraph(files)
+	}
+
+	for _, edge := range previousCommitGraph.Edges {
+		prevFrom := edge.From
+		prevTo := edge.To
+		var currFrom *crdt.Vertex
+		var currTo *crdt.Vertex
+
+		if prevFrom.ModType == crdt.Tree {
+			if currFrom = lwwGraph.GetVertexByValue(prevFrom.Value.(models.Tree), crdt.Tree); currFrom == nil {
+				//lwwGraph.AddVertex(prevFrom.Value, crdt.Tree)
+				//currFrom = lwwGraph.GetVertexByValue(prevFrom.Value.(models.Tree), crdt.Tree)
+				currFrom = prevFrom
+				lwwGraph.AddVtx(currFrom)
+			}
+		}
+
+		if prevTo.ModType == crdt.Tree {
+			if currTo = lwwGraph.GetVertexByValue(prevTo.Value.(models.Tree), crdt.Tree); currTo == nil {
+				//lwwGraph.AddVertex(prevTo.Value, crdt.Tree)
+				//currTo = lwwGraph.GetVertexByValue(prevTo.Value.(models.Tree), crdt.Tree)
+				currTo = prevTo
+				lwwGraph.AddVtx(currTo)
+			}
+		} else if prevTo.ModType == crdt.Blob {
+			if currTo = lwwGraph.GetVertexByValue(prevTo.Value.(models.Blob), crdt.Blob); currTo == nil {
+				//lwwGraph.AddVertex(prevTo.Value, crdt.Blob)
+				//currTo = lwwGraph.GetVertexByValue(prevTo.Value.(models.Blob), crdt.Blob)
+				currTo = prevTo
+				lwwGraph.AddVtx(currTo)
+			}
+		}
+
+		if currFrom != nil && currTo != nil && currFrom.ModType != crdt.Commit && !lwwGraph.EdgeExists(currFrom, currTo) {
+			lwwGraph.AddEdge(currTo, currFrom)
+		}
+
+		currRootVtx := lwwGraph.GetRootVertex()
+		currCommitModel := models.CommitModel{
+			CommitMsg:    commitMsg,
+			ParentCommit: nil,
+		}
+
+		lwwGraph.AddVertex(currCommitModel, crdt.Commit)
+		lwwGraph.AddEdge(currRootVtx, lwwGraph.GetVertexByValue(currCommitModel, crdt.Commit))
+
+		/*prevRootVtx := previousCommitGraph.GetRootVertex()
+		if prevRootVtx.ModType == crdt.Commit {
+			prevCommitModel := prevRootVtx.Value.(models.CommitModel).ParentCommit
+			prevCommitModel.ParentCommit = &currCommitModel
+		}*/
+
+	}
+
+	return nil
 }
 
 func createGraphForFirstCommit(commitMsg string) error {
