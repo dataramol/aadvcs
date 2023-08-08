@@ -1,40 +1,34 @@
 package cli
 
 import (
-	"fmt"
-	"github.com/stretchr/testify/assert"
-	"path/filepath"
+	"encoding/json"
+	"github.com/dataramol/aadvcs/crdt"
+	"os"
 	"testing"
 )
 
 func TestCommit(t *testing.T) {
-	trackedFile := "D:\\Study\\MSc Project\\Codebase\\aadvcs\\.aadvcs\\status.txt"
-	//commitDir := "D:\\Study\\MSc Project\\Codebase\\aadvcs\\.aadvcs\\commit"
-	//noOfDirectory, err := getNumberOfChildrenDir(commitDir)
-	//newCommitDirName := filepath.Join(commitDir, fmt.Sprintf("v%v", noOfDirectory+1))
-	metadata, err := createMetadataMap(trackedFile)
-	assert.Nil(t, err)
-	for _, file := range metadata {
-		/*paths := strings.Split(file.Path, "\\")
-		for _, path := range paths {
-			path, _ = filepath.Dir(path)
-			info, _ := os.Stat(path)
-			fmt.Printf("%v is Directory ? -> %v\n", path, info.IsDir())
-		}*/
-		info, err := filepath.Abs(file.Path)
-		fmt.Printf("%v ------ %v--------%v\n", filepath.Dir(file.Path), info, err)
+	graphFile1 := "D:\\Study\\MSc Project\\Codebase\\aadvcs\\.aadvcs\\commit\\v1\\graph.json"
+	graphFile2 := "D:\\Study\\MSc Project\\Codebase\\aadvcs\\.aadvcs\\commit\\v2\\graph.json"
+	file1, err := os.ReadFile(graphFile1)
+	if err != nil {
+		return
+	}
+	file2, err := os.ReadFile(graphFile2)
+	if err != nil {
+		return
+	}
+	var graph1 crdt.LastWriterWinsGraph
+	var graph2 crdt.LastWriterWinsGraph
+	err = json.Unmarshal(file1, &graph1)
+	if err != nil {
+		return
+	}
+	err = json.Unmarshal(file2, &graph2)
+	if err != nil {
+		return
 	}
 
-	/*g := crdt.NewLastWriterWinsGraph("node1")
-	tm := models.Tree{FileName: "dir"}
-	g.AddVertex(tm, "v1")
-
-	/*for id, v := range g.Vertices {
-		tm := v.Value.(models.Tree)
-		fmt.Printf("vertex for id %v is %v", id, tm.FileName)
-	}
-
-	retval := g.GetVertexByValue(models.Tree{FileName: "dfh"})
-	fmt.Printf("Vertex Value : %v", retval)
-	*/
+	graph1.PrintGraph()
+	graph2.PrintGraph()
 }

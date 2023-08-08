@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/dataramol/aadvcs/models"
 	"github.com/fatih/color"
+	"github.com/mitchellh/mapstructure"
 	"sync"
 
 	"github.com/dataramol/aadvcs/clock"
@@ -79,9 +80,9 @@ func (lwwGraph *LastWriterWinsGraph) AddEdge(To *Vertex, From *Vertex) {
 func (lwwGraph *LastWriterWinsGraph) PrintGraph() {
 	fmt.Println("*****Printing Graph*****")
 	for _, v := range lwwGraph.Vertices {
-		color.Green("Vertex is %v :-> ", v)
+		color.Green("Vertex is %v :-> ", v.Value)
 		for _, adjVtx := range v.AdjacentVertices {
-			color.Yellow("Adjacent Vertex : %v\t", adjVtx)
+			color.Yellow("Adjacent Vertex : %v\t", adjVtx.Value)
 		}
 		fmt.Println()
 	}
@@ -98,15 +99,16 @@ func (lwwGraph *LastWriterWinsGraph) GetVertexByValue(targetValue interface{}, m
 }
 
 func (lwwGraph *LastWriterWinsGraph) GetVertexByFilePath(filePath string, modType ModelType) *Vertex {
-
+	var blobModel models.Blob
 	for _, vertex := range lwwGraph.Vertices {
-
+		color.Magenta("Vertex Value is %v and Type is %T", vertex, vertex)
 		if modType == vertex.ModType && modType == Tree {
 			if vertex.Value.(models.Tree).FileName == filePath {
 				return vertex
 			}
 		} else if modType == vertex.ModType && modType == Blob {
-			if vertex.Value.(models.Blob).FileName == filePath {
+			mapstructure.Decode(vertex.Value, &blobModel)
+			if blobModel.FileName == filePath {
 				return vertex
 			}
 		}

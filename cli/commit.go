@@ -64,12 +64,16 @@ func runCommitCommand(trackedFilePath, msg string) error {
 	defer stagingFilePtr.Close()
 
 	err, lwwGraph = createLWWGraph(msg)
-
+	color.Red("Error After Graph Creation :- %v", err)
+	lwwGraph.PrintGraph()
 	if lwwGraph != nil {
 		fp, err := createNestedFile(filepath.Join(newCommitDirName, "graph.json"))
+		color.Red("Error After Creating Graph File - %v", err)
 		lwwGraph.IncrementClock()
 		if err == nil {
-			jsonData, _ := json.MarshalIndent(lwwGraph, "", "")
+			color.Yellow("Marshalling Graph Now")
+			jsonData, err := json.MarshalIndent(lwwGraph, "", "")
+			color.Red("***Error While Marshalling*** -> %v", err)
 			color.Magenta("%v", string(jsonData))
 			_, _ = fp.Write(jsonData)
 			fp.Close()
