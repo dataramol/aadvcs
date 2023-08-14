@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/dataramol/aadvcs/crdt"
 	"github.com/dataramol/aadvcs/models"
+	"github.com/dataramol/aadvcs/utils"
 	"github.com/fatih/color"
 	"github.com/mitchellh/mapstructure"
 	"os"
@@ -12,10 +13,12 @@ import (
 	"strings"
 )
 
-var lwwGraph = crdt.NewLastWriterWinsGraph("node1")
+//var lwwGraph = crdt.NewLastWriterWinsGraph("node1")
 
-func createLWWGraph(commitMsg string) (error, *crdt.LastWriterWinsGraph) {
-	noOfCommits, err := getNumberOfChildrenDir(aadvcsCommitDirPath)
+func createLWWGraph(commitMsg string, ws *models.WritableServer) (error, *crdt.LastWriterWinsGraph) {
+
+	LwwGraph = crdt.NewLastWriterWinsGraph(ws.ListAddr)
+	noOfCommits, err := utils.GetNumberOfChildrenDir(utils.AadvcsCommitDirPath)
 	if err != nil {
 		return err, nil
 	}
@@ -25,7 +28,7 @@ func createLWWGraph(commitMsg string) (error, *crdt.LastWriterWinsGraph) {
 			return err, nil
 		}
 	} else {
-		currentDir := filepath.Join(aadvcsCommitDirPath, fmt.Sprintf("v%v", noOfCommits-1))
+		currentDir := filepath.Join(utils.AadvcsCommitDirPath, fmt.Sprintf("v%v", noOfCommits-1))
 		color.Red("Current Dir -> ", currentDir)
 		color.Red("Creating Graph For non first Commit")
 		pth := filepath.Join(currentDir, "graph.json")
@@ -49,20 +52,21 @@ func createLWWGraph(commitMsg string) (error, *crdt.LastWriterWinsGraph) {
 
 		color.Magenta("Before Printing Graph")
 
-		lwwGraph.PrintGraph()
+		LwwGraph.PrintGraph()
 
 		color.Magenta("After Printing Graph")
 	}
-	return nil, lwwGraph
+	return nil, LwwGraph
 }
 
 func createGraphForNonFirstCommit(commitMsg string, previousCommitGraph *crdt.LastWriterWinsGraph, commitVersion int) error {
-	metadata, err := createMetadataMap(stagingAreaFile)
+	metadata, err := createMetadataMap(utils.StagingAreaFile)
 	if err != nil {
 		return err
 	}
 
 	for _, file := range metadata {
+		LwwGraph.Paths[file.Path] = ""
 		files := strings.Split(file.Path, "\\")
 		createVerticesInGraph(files, file.Path)
 	}
@@ -72,7 +76,7 @@ func createGraphForNonFirstCommit(commitMsg string, previousCommitGraph *crdt.La
 		createEdgesInGraph(files)
 	}
 
-	for _, vtx := range lwwGraph.Vertices {
+	for _, vtx := range LwwGraph.Vertices {
 		color.Yellow("Vertex :- %T", vtx.Value)
 	}
 
@@ -90,11 +94,11 @@ func createGraphForNonFirstCommit(commitMsg string, previousCommitGraph *crdt.La
 				return err
 			}
 			color.Magenta("Previous From -> %T", prevFrom)
-			if currFrom = lwwGraph.GetVertexByValue(treeModel, crdt.Tree); currFrom == nil {
+			if currFrom = LwwGraph.GetVertexByValue(treeModel, crdt.Tree); currFrom == nil {
 				//lwwGraph.AddVertex(prevFrom.Value, crdt.Tree)
 				//currFrom = lwwGraph.GetVertexByValue(prevFrom.Value.(models.Tree), crdt.Tree)
 				currFrom = prevFrom
-				lwwGraph.AddVtx(currFrom)
+				LwwGraph.AddVtx(currFrom)
 			}
 		}
 
@@ -105,11 +109,11 @@ func createGraphForNonFirstCommit(commitMsg string, previousCommitGraph *crdt.La
 				color.Red("Err While Map Structure Decoding -> %v", err)
 				return err
 			}
-			if currTo = lwwGraph.GetVertexByValue(treeModel, crdt.Tree); currTo == nil {
+			if currTo = LwwGraph.GetVertexByValue(treeModel, crdt.Tree); currTo == nil {
 				//lwwGraph.AddVertex(prevTo.Value, crdt.Tree)
 				//currTo = lwwGraph.GetVertexByValue(prevTo.Value.(models.Tree), crdt.Tree)
 				currTo = prevTo
-				lwwGraph.AddVtx(currTo)
+				LwwGraph.AddVtx(currTo)
 			}
 		} else if prevTo.ModType == crdt.Blob {
 			var blobModel models.Blob
@@ -118,16 +122,16 @@ func createGraphForNonFirstCommit(commitMsg string, previousCommitGraph *crdt.La
 				color.Red("Err While Map Structure Decoding -> %v", err)
 				return err
 			}
-			if currTo = lwwGraph.GetVertexByFilePath(blobModel.FileName, crdt.Blob); currTo == nil {
+			if currTo = LwwGraph.GetVertexByFilePath(blobModel.FileName, crdt.Blob); currTo == nil {
 				//lwwGraph.AddVertex(prevTo.Value, crdt.Blob)
 				//currTo = lwwGraph.GetVertexByValue(prevTo.Value.(models.Blob), crdt.Blob)
 				currTo = prevTo
-				lwwGraph.AddVtx(currTo)
+				LwwGraph.AddVtx(currTo)
 			}
 		}
 
-		if currFrom != nil && currTo != nil && currFrom.ModType != crdt.Commit && !lwwGraph.EdgeExists(currFrom, currTo) {
-			lwwGraph.AddEdge(currTo, currFrom)
+		if currFrom != nil && currTo != nil && currFrom.ModType != crdt.Commit && !LwwGraph.EdgeExists(currFrom, currTo) {
+			LwwGraph.AddEdge(currTo, currFrom)
 		}
 
 		/*prevRootVtx := previousCommitGraph.GetRootVertex()
@@ -138,23 +142,23 @@ func createGraphForNonFirstCommit(commitMsg string, previousCommitGraph *crdt.La
 
 	}
 
-	currRootVtx := lwwGraph.GetRootVertex()
+	currRootVtx := LwwGraph.GetRootVertex()
 	currCommitModel := models.CommitModel{
 		CommitMsg:     commitMsg,
 		ParentCommit:  nil,
 		CommitVersion: commitVersion,
 	}
 
-	lwwGraph.AddVertex(currCommitModel, crdt.Commit)
-	lwwGraph.AddEdge(currRootVtx, lwwGraph.GetVertexByValue(currCommitModel, crdt.Commit))
+	LwwGraph.AddVertex(currCommitModel, crdt.Commit)
+	LwwGraph.AddEdge(currRootVtx, LwwGraph.GetVertexByValue(currCommitModel, crdt.Commit))
 
-	lwwGraph.Clock.Clock[lwwGraph.NodeId] = previousCommitGraph.Clock.Clock[lwwGraph.NodeId]
+	LwwGraph.Clock.Clock[LwwGraph.NodeId] = previousCommitGraph.Clock.Clock[LwwGraph.NodeId]
 
 	return nil
 }
 
 func createGraphForFirstCommit(commitMsg string) error {
-	metadata, err := createMetadataMap(stagingAreaFile)
+	metadata, err := createMetadataMap(utils.StagingAreaFile)
 	if err != nil {
 		return err
 	}
@@ -169,7 +173,7 @@ func createGraphForFirstCommit(commitMsg string) error {
 		createEdgesInGraph(files)
 	}
 
-	rootDir := lwwGraph.GetRootVertex()
+	rootDir := LwwGraph.GetRootVertex()
 
 	commitVertex := models.CommitModel{
 		CommitMsg:     commitMsg,
@@ -177,30 +181,31 @@ func createGraphForFirstCommit(commitMsg string) error {
 		CommitVersion: 1,
 	}
 
-	lwwGraph.AddVertex(commitVertex, crdt.Commit)
-	lwwGraph.AddEdge(rootDir, lwwGraph.GetVertexByValue(commitVertex, crdt.Commit))
+	LwwGraph.AddVertex(commitVertex, crdt.Commit)
+	LwwGraph.AddEdge(rootDir, LwwGraph.GetVertexByValue(commitVertex, crdt.Commit))
 
 	return nil
 }
 
 func createVerticesInGraph(items []string, originalPath string) {
 	for i := 0; i < len(items)-1; i++ {
-		if lwwGraph.GetVertexByFilePath(items[i], crdt.Tree) == nil {
-			lwwGraph.AddVertex(models.Tree{
+		if LwwGraph.GetVertexByFilePath(items[i], crdt.Tree) == nil {
+			LwwGraph.AddVertex(models.Tree{
 				FileName: items[i],
 			}, crdt.Tree)
 		}
 	}
 
-	if lwwGraph.GetVertexByFilePath(filepath.Base(originalPath), crdt.Blob) == nil {
+	if LwwGraph.GetVertexByFilePath(filepath.Base(originalPath), crdt.Blob) == nil {
 		fileContent, err := os.ReadFile(originalPath)
 		if err != nil {
 			color.Red("Error for path %v -> ######### %v", originalPath, err)
 		}
-		lwwGraph.AddVertex(models.Blob{
+		LwwGraph.AddVertex(models.Blob{
 			FileName: filepath.Base(originalPath),
 			Content:  string(fileContent),
 		}, crdt.Blob)
+		LwwGraph.Paths[originalPath] = string(fileContent)
 	}
 }
 
@@ -212,14 +217,14 @@ func createEdgesInGraph(items []string) {
 		var FromVertex *crdt.Vertex
 
 		if to == len(items)-1 {
-			ToVertex = lwwGraph.GetVertexByFilePath(items[to], crdt.Blob)
+			ToVertex = LwwGraph.GetVertexByFilePath(items[to], crdt.Blob)
 		} else {
-			ToVertex = lwwGraph.GetVertexByFilePath(items[to], crdt.Tree)
+			ToVertex = LwwGraph.GetVertexByFilePath(items[to], crdt.Tree)
 		}
-		FromVertex = lwwGraph.GetVertexByFilePath(items[from], crdt.Tree)
+		FromVertex = LwwGraph.GetVertexByFilePath(items[from], crdt.Tree)
 
-		if !lwwGraph.EdgeExists(FromVertex, ToVertex) {
-			lwwGraph.AddEdge(ToVertex, FromVertex)
+		if !LwwGraph.EdgeExists(FromVertex, ToVertex) {
+			LwwGraph.AddEdge(ToVertex, FromVertex)
 		}
 	}
 }

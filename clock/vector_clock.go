@@ -68,11 +68,13 @@ func (v *VectorClock) Compare(other *VectorClock) Ordering {
 	defer v.mu.Unlock()
 	var ordering Ordering
 	if len(v.Clock) != len(other.Clock) {
+		fmt.Printf("Different nodes registered")
 		return NotComparable
 	}
 
 	for node := range v.Clock {
 		if _, exists := other.Clock[node]; !exists {
+			fmt.Printf("Nodes not registered")
 			return NotComparable
 		}
 	}

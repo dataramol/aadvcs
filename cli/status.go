@@ -3,6 +3,7 @@ package cli
 import (
 	"bufio"
 	"github.com/dataramol/aadvcs/models"
+	"github.com/dataramol/aadvcs/utils"
 	"github.com/fatih/color"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
@@ -75,7 +76,7 @@ func printStatus(writer io.Writer, metadataArr MetadataArr) {
 }
 
 func readMetadataFromStagingFile() (MetadataArr, error) {
-	filePtr, err := createOrOpenFileRWMode(stagingAreaFile)
+	filePtr, err := utils.CreateOrOpenFileRWMode(utils.StagingAreaFile)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +86,7 @@ func readMetadataFromStagingFile() (MetadataArr, error) {
 
 	fileScanner := bufio.NewScanner(filePtr)
 	for fileScanner.Scan() {
-		metadata := extractFileMetadataFromLine(fileScanner.Text())
+		metadata := utils.ExtractFileMetadataFromLine(fileScanner.Text())
 		updatedStatusMap[metadata.Path] = metadata
 	}
 

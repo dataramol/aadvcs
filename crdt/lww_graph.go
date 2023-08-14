@@ -35,12 +35,14 @@ type LastWriterWinsGraph struct {
 	Edges    []*Edge
 	Clock    *clock.VectorClock
 	mu       sync.Mutex
+	Paths    map[string]string
 }
 
 func NewLastWriterWinsGraph(nodeId string) *LastWriterWinsGraph {
 	return &LastWriterWinsGraph{
 		NodeId: nodeId,
 		Clock:  clock.NewVectorClock(nodeId),
+		Paths:  make(map[string]string),
 	}
 }
 
@@ -101,7 +103,6 @@ func (lwwGraph *LastWriterWinsGraph) GetVertexByValue(targetValue interface{}, m
 func (lwwGraph *LastWriterWinsGraph) GetVertexByFilePath(filePath string, modType ModelType) *Vertex {
 	var blobModel models.Blob
 	for _, vertex := range lwwGraph.Vertices {
-		color.Magenta("Vertex Value is %v and Type is %T", vertex, vertex)
 		if modType == vertex.ModType && modType == Tree {
 			if vertex.Value.(models.Tree).FileName == filePath {
 				return vertex

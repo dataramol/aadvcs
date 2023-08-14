@@ -1,4 +1,4 @@
-package cli
+package utils
 
 import (
 	"io"
@@ -10,11 +10,11 @@ import (
 )
 
 const (
-	separator   = "|"
+	Separator   = "|"
 	defaultTime = "0001-01-01 00:00:00 +0000 UTC"
 )
 
-func checkPathExists(path string) (bool, error) {
+func CheckPathExists(path string) (bool, error) {
 	_, err := os.Stat(path)
 	if err == nil {
 		return true, nil
@@ -25,25 +25,25 @@ func checkPathExists(path string) (bool, error) {
 	return false, err
 }
 
-func createDirectories(dirs ...string) error {
+func CreateDirectories(dirs ...string) error {
 	for _, dir := range dirs {
-		if err := createDirectory(dir); err != nil {
+		if err := CreateDirectory(dir); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func createDirectory(dirName string) error {
+func CreateDirectory(dirName string) error {
 	return os.MkdirAll(dirName, os.ModePerm)
 }
 
-func createFile(name string) error {
-	_, err := createOrOpenFileRWMode(name)
+func CreateFile(name string) error {
+	_, err := CreateOrOpenFileRWMode(name)
 	return err
 }
 
-func createOrOpenFileRWMode(name string) (*os.File, error) {
+func CreateOrOpenFileRWMode(name string) (*os.File, error) {
 	return os.OpenFile(name, os.O_CREATE|os.O_RDWR, os.ModePerm)
 }
 
@@ -51,14 +51,14 @@ func CreateOrOpenFileAppendMode(name string) (*os.File, error) {
 	return os.OpenFile(name, os.O_CREATE|os.O_WRONLY|os.O_APPEND, os.ModePerm)
 }
 
-func clearFileContent(filePtr *os.File) error {
+func ClearFileContent(filePtr *os.File) error {
 	err := filePtr.Truncate(0)
 	filePtr.Seek(0, io.SeekStart)
 	return err
 }
 
-func extractFileMetadataFromLine(lineStr string) models.FileMetaData {
-	structure := strings.Split(lineStr, separator)
+func ExtractFileMetadataFromLine(lineStr string) models.FileMetaData {
+	structure := strings.Split(lineStr, Separator)
 	return models.FileMetaData{
 		Path:             structure[0],
 		ModificationTime: structure[1],
@@ -66,7 +66,7 @@ func extractFileMetadataFromLine(lineStr string) models.FileMetaData {
 	}
 }
 
-func getNumberOfChildrenDir(path string) (int, error) {
+func GetNumberOfChildrenDir(path string) (int, error) {
 	files, err := os.ReadDir(path)
 	if err != nil {
 		return 0, err
@@ -74,7 +74,7 @@ func getNumberOfChildrenDir(path string) (int, error) {
 	return len(files), nil
 }
 
-func createNestedFile(p string) (*os.File, error) {
+func CreateNestedFile(p string) (*os.File, error) {
 	if err := os.MkdirAll(filepath.Dir(p), os.ModePerm); err != nil {
 		return nil, err
 	}

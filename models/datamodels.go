@@ -28,3 +28,8 @@ var (
 	StatusCreated FileStatus = "Created"
 	StatusUpdated FileStatus = "Updated"
 )
+
+type WritableServer struct {
+	ListAddr    string
+	Connections []string
+}

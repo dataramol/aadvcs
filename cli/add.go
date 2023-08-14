@@ -3,6 +3,7 @@ package cli
 import (
 	"bufio"
 	"fmt"
+	"github.com/dataramol/aadvcs/utils"
 	"github.com/spf13/cobra"
 	"io/fs"
 	"os"
@@ -23,13 +24,13 @@ var addCommand = &cobra.Command{
 	Short:   "For tracking file status : Created or Modified",
 	Example: "aadvcs add test.txt",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runAddCommand(stagingAreaFile, args)
+		return runAddCommand(utils.StagingAreaFile, args)
 	},
 }
 
 func runAddCommand(stagingAreaFilePath string, filePaths []string) error {
 
-	metadata, err := createMetadataMap(statusFile)
+	metadata, err := createMetadataMap(utils.StatusFile)
 
 	if err != nil {
 		return err
@@ -37,13 +38,13 @@ func runAddCommand(stagingAreaFilePath string, filePaths []string) error {
 
 	prepareStagingArea(filePaths, metadata)
 
-	statusFilePtr, _ := createOrOpenFileRWMode(statusFile)
+	statusFilePtr, _ := utils.CreateOrOpenFileRWMode(utils.StatusFile)
 	defer statusFilePtr.Close()
 
-	stagingFilePtr, _ := CreateOrOpenFileAppendMode(stagingAreaFilePath)
+	stagingFilePtr, _ := utils.CreateOrOpenFileAppendMode(stagingAreaFilePath)
 	defer stagingFilePtr.Close()
 
-	if err := clearFileContent(statusFilePtr); err != nil {
+	if err := utils.ClearFileContent(statusFilePtr); err != nil {
 		return err
 	}
 
@@ -60,11 +61,11 @@ func runAddCommand(stagingAreaFilePath string, filePaths []string) error {
 }
 
 func formatMetaData(mtdata *models.FileMetaData) string {
-	return fmt.Sprintf("%v%v%v%v%v\n", mtdata.Path, separator, mtdata.ModificationTime, separator, string(mtdata.Status))
+	return fmt.Sprintf("%v%v%v%v%v\n", mtdata.Path, utils.Separator, mtdata.ModificationTime, utils.Separator, string(mtdata.Status))
 }
 
 func extractMetadata(metadata metadataMap, filePath string, fileCurrModTime time.Time) {
-	fileCurrModTimeStr := fileCurrModTime.Format(aadvcsTimeFormat)
+	fileCurrModTimeStr := fileCurrModTime.Format(utils.AadvcsTimeFormat)
 	mtdata, ok := metadata[filePath]
 
 	metadataStruct := models.FileMetaData{
@@ -82,7 +83,7 @@ func extractMetadata(metadata metadataMap, filePath string, fileCurrModTime time
 }
 
 func createMetadataMap(filePath string) (metadataMap, error) {
-	trackedFile, err := createOrOpenFileRWMode(filePath)
+	trackedFile, err := utils.CreateOrOpenFileRWMode(filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +94,7 @@ func createMetadataMap(filePath string) (metadataMap, error) {
 
 	for fileScanner.Scan() {
 		line := fileScanner.Text()
-		fmd := extractFileMetadataFromLine(line)
+		fmd := utils.ExtractFileMetadataFromLine(line)
 		fileUpdateMap[fmd.Path] = fmd
 	}
 
