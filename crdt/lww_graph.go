@@ -6,6 +6,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/mitchellh/mapstructure"
 	"sync"
+	"time"
 
 	"github.com/dataramol/aadvcs/clock"
 )
@@ -30,12 +31,14 @@ type Edge struct {
 }
 
 type LastWriterWinsGraph struct {
-	NodeId   string
-	Vertices []*Vertex
-	Edges    []*Edge
-	Clock    *clock.VectorClock
-	mu       sync.Mutex
-	Paths    map[string]string
+	NodeId       string
+	Vertices     []*Vertex
+	Edges        []*Edge
+	Clock        *clock.VectorClock
+	mu           sync.Mutex
+	Paths        map[string]string
+	TimeStamp    time.Time
+	LatestCommit *models.CommitModel
 }
 
 func NewLastWriterWinsGraph(nodeId string) *LastWriterWinsGraph {
@@ -147,4 +150,8 @@ func (lwwGraph *LastWriterWinsGraph) GetRootVertex() *Vertex {
 	}
 
 	return nil
+}
+
+func (lwwGraph *LastWriterWinsGraph) Merge(other *LastWriterWinsGraph) {
+
 }

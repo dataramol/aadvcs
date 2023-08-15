@@ -10,7 +10,10 @@ import (
 	"github.com/dataramol/aadvcs/models"
 	"github.com/dataramol/aadvcs/utils"
 	"github.com/sirupsen/logrus"
+	"io"
 	"net"
+	"os"
+	"path/filepath"
 )
 
 type Server struct {
@@ -113,7 +116,10 @@ func (s *Server) handleNewPeer(peer *Peer) error {
 	s.RegisterPeer(peer)
 	_, err := s.handshake(peer)
 	if err != nil {
-		peer.Conn.Close()
+		err := peer.Conn.Close()
+		if err != nil {
+			return err
+		}
 		delete(s.Peers, peer.Conn.RemoteAddr().String())
 		return fmt.Errorf("%s:handshake with incoming node failed: %s", s.ListenAddress, err)
 	}
@@ -122,7 +128,10 @@ func (s *Server) handleNewPeer(peer *Peer) error {
 
 	if !peer.Outbound {
 		if err := s.SendHandshake(peer); err != nil {
-			peer.Conn.Close()
+			err := peer.Conn.Close()
+			if err != nil {
+				return err
+			}
 			delete(s.Peers, peer.Conn.RemoteAddr().String())
 
 			return fmt.Errorf("failed to send handshake with peer : %s", err)
@@ -188,8 +197,14 @@ func (s *Server) handshake(p *Peer) (*Handshake, error) {
 	if err != nil {
 		return nil, err
 	}
-	fp.Write(data)
-	fp.Close()
+	_, err = fp.Write(data)
+	if err != nil {
+		return nil, err
+	}
+	err = fp.Close()
+	if err != nil {
+		return nil, err
+	}
 
 	return hs, nil
 }
@@ -198,14 +213,19 @@ func (s *Server) handleMessage(msg *Message) error {
 	fmt.Printf("%+v\n", msg.Payload)
 	graph := msg.Payload.(crdt.LastWriterWinsGraph)
 
-	fmt.Printf("Now Comparing Clock \n")
 	eventOrder := s.LastWriterWinsGraph.Clock.Compare(graph.Clock)
-	fmt.Printf("Event Order :- %+v", eventOrder)
 	if eventOrder == clock.HappensAfter {
 		logrus.Info("Incoming event is Latest")
+		err := handleHappensAfter(s.ListenAddress, &graph, s.LastWriterWinsGraph)
+		if err != nil {
+			return err
+		}
+
 	} else if eventOrder == clock.HappensBefore {
+		handleHappensBefore(&graph, s.LastWriterWinsGraph)
 		logrus.Info("Incoming event is stale and would be discarded")
 	} else if eventOrder == clock.CONCURRENT {
+		handleMerge(&graph, s.LastWriterWinsGraph)
 		logrus.Info("Conflict is there with incoming event. Trying To merge changes...")
 	} else if eventOrder == clock.NotComparable {
 		logrus.Info("2 Events are not comparable")
@@ -213,16 +233,6 @@ func (s *Server) handleMessage(msg *Message) error {
 
 	fmt.Printf("After Comparing Clocks")
 
-	for p, c := range graph.Paths {
-		file, err := utils.CreateNestedFile(p)
-		if err != nil {
-			return err
-		}
-		_, err = file.Write([]byte(c))
-		if err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -233,4 +243,78 @@ func init() {
 	gob.Register(models.Blob{})
 	gob.Register(models.Tree{})
 	gob.Register(models.CommitModel{})
+	gob.Register(map[string]interface{}{})
+}
+
+func handleHappensAfter(serverAddress string, incomingState *crdt.LastWriterWinsGraph, currentState *crdt.LastWriterWinsGraph) error {
+	// If incoming event happens after event at the server, then we accept those changes.
+	currentState = incomingState
+	currentState.NodeId = serverAddress
+	// Create directory structure as it was on other node
+	for p, c := range currentState.Paths {
+		file, err := utils.CreateNestedFile(p)
+		if err != nil {
+			return err
+		}
+		_, err = file.Write([]byte(c))
+		if err != nil {
+			return err
+		}
+	}
+
+	// now create same directories in commit folder
+	noOfDirectory, err := utils.GetNumberOfChildrenDir(utils.AadvcsCommitDirPath)
+	if err != nil {
+		return err
+	}
+	commitVtx := incomingState.LatestCommit
+	newCommitDirName := filepath.Join(utils.AadvcsCommitDirPath, fmt.Sprintf("v%v", noOfDirectory+1))
+	commitMetadataFP, err := utils.CreateNestedFile(filepath.Join(newCommitDirName, utils.AadvcsCommitMetadataFile))
+	if err != nil {
+		return err
+	}
+	defer func(commitMetadataFP *os.File) {
+		err := commitMetadataFP.Close()
+		if err != nil {
+
+		}
+	}(commitMetadataFP)
+
+	_, _ = commitMetadataFP.WriteString(fmt.Sprintf("%v%v%v", commitVtx.CommitMsg, utils.Separator, currentState.TimeStamp.Format(utils.AadvcsTimeFormat)))
+
+	for p := range currentState.Paths {
+		destCommitFilePath := filepath.Join(newCommitDirName, p)
+
+		destFilePtr, _ := utils.CreateNestedFile(destCommitFilePath)
+		originalFilePtr, _ := os.Open(p)
+		_, _ = io.Copy(destFilePtr, originalFilePtr)
+
+		err = destFilePtr.Close()
+		if err != nil {
+			return err
+		}
+		err = originalFilePtr.Close()
+		if err != nil {
+			return err
+		}
+	}
+
+	// create graph.json
+	fp, err := utils.CreateNestedFile(filepath.Join(newCommitDirName, "graph.json"))
+	jsonData, err := json.MarshalIndent(currentState, "", "")
+	_, _ = fp.Write(jsonData)
+	err = fp.Close()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func handleHappensBefore(incomingState *crdt.LastWriterWinsGraph, currentState *crdt.LastWriterWinsGraph) {
+	// Here we have to discard the incoming event
+
+}
+
+func handleMerge(incomingState *crdt.LastWriterWinsGraph, currentState *crdt.LastWriterWinsGraph) {
+
 }

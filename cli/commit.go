@@ -44,7 +44,8 @@ func runCommitCommand(trackedFilePath, msg string) error {
 	}
 
 	newCommitDirName := filepath.Join(utils.AadvcsCommitDirPath, fmt.Sprintf("v%v", noOfDirectory+1))
-	err = createCommitMetadataFile(newCommitDirName, msg, time.Now())
+	commitTime := time.Now()
+	err = createCommitMetadataFile(newCommitDirName, msg, commitTime)
 	if err != nil {
 		return err
 	}
@@ -73,6 +74,7 @@ func runCommitCommand(trackedFilePath, msg string) error {
 	err, LwwGraph = createLWWGraph(msg, ws)
 	color.Red("Error After Graph Creation :- %v", err)
 	LwwGraph.PrintGraph()
+	LwwGraph.TimeStamp = commitTime
 	if LwwGraph != nil {
 		fp, err := utils.CreateNestedFile(filepath.Join(newCommitDirName, "graph.json"))
 		color.Red("Error After Creating Graph File - %v", err)

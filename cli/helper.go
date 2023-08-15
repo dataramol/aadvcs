@@ -149,6 +149,8 @@ func createGraphForNonFirstCommit(commitMsg string, previousCommitGraph *crdt.La
 		CommitVersion: commitVersion,
 	}
 
+	LwwGraph.LatestCommit = &currCommitModel
+
 	LwwGraph.AddVertex(currCommitModel, crdt.Commit)
 	LwwGraph.AddEdge(currRootVtx, LwwGraph.GetVertexByValue(currCommitModel, crdt.Commit))
 
@@ -180,6 +182,8 @@ func createGraphForFirstCommit(commitMsg string) error {
 		ParentCommit:  nil,
 		CommitVersion: 1,
 	}
+
+	LwwGraph.LatestCommit = &commitVertex
 
 	LwwGraph.AddVertex(commitVertex, crdt.Commit)
 	LwwGraph.AddEdge(rootDir, LwwGraph.GetVertexByValue(commitVertex, crdt.Commit))
