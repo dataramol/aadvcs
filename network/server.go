@@ -14,6 +14,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 type Server struct {
@@ -60,6 +61,7 @@ func (s *Server) Start() {
 }
 
 func (s *Server) RegisterPeer(p *Peer) {
+	delete(s.Peers, "")
 	s.Peers[p.ListenAddr] = p
 }
 
@@ -99,14 +101,27 @@ func (s *Server) loop() {
 			logrus.WithFields(logrus.Fields{
 				"addr": peer.Conn.RemoteAddr(),
 			}).Info("new node disconnected")
-			delete(s.Peers, peer.Conn.RemoteAddr().String())
+			//delete(s.Peers, peer.Conn.RemoteAddr().String())
 		case peer := <-s.AddPeer:
 			if err := s.handleNewPeer(peer); err != nil {
 				logrus.Errorf("handle peer error: %s", err)
 			}
 		case msg := <-s.MsgCh:
-			if err := s.handleMessage(msg); err != nil {
-				logrus.Errorf("Error while handling msg : %s", err)
+			logrus.WithFields(logrus.Fields{
+				"Merge":   msg.Merge,
+				"From":    msg.From,
+				"Payload": msg.Payload,
+			})
+			if msg.Merge {
+				logrus.Info("Merging clock..")
+				err := s.handleClockMerge(msg)
+				if err != nil {
+					return
+				}
+			} else {
+				if err := s.handleMessage(msg); err != nil {
+					logrus.Errorf("Error while handling msg : %s", err)
+				}
 			}
 		}
 	}
@@ -114,13 +129,25 @@ func (s *Server) loop() {
 
 func (s *Server) handleNewPeer(peer *Peer) error {
 	s.RegisterPeer(peer)
+	for la, pr := range s.Peers {
+		logrus.WithFields(logrus.Fields{
+			"ListenAddress": la,
+			"Peer":          pr,
+		}).Info("Peers after handshake")
+	}
 	_, err := s.handshake(peer)
+	for la, pr := range s.Peers {
+		logrus.WithFields(logrus.Fields{
+			"ListenAddress": la,
+			"Peer":          pr,
+		}).Info("Peers after handshake")
+	}
 	if err != nil {
 		err := peer.Conn.Close()
 		if err != nil {
 			return err
 		}
-		delete(s.Peers, peer.Conn.RemoteAddr().String())
+		//delete(s.Peers, peer.Conn.RemoteAddr().String())
 		return fmt.Errorf("%s:handshake with incoming node failed: %s", s.ListenAddress, err)
 	}
 
@@ -132,11 +159,13 @@ func (s *Server) handleNewPeer(peer *Peer) error {
 			if err != nil {
 				return err
 			}
-			delete(s.Peers, peer.Conn.RemoteAddr().String())
+			//delete(s.Peers, peer.Conn.RemoteAddr().String())
 
 			return fmt.Errorf("failed to send handshake with peer : %s", err)
 		}
 	}
+
+	s.RegisterPeer(peer)
 
 	logrus.WithFields(logrus.Fields{
 		"peer":       peer.Conn.RemoteAddr(),
@@ -144,13 +173,30 @@ func (s *Server) handleNewPeer(peer *Peer) error {
 		"we":         s.ListenAddress,
 	}).Info("handshake successfully: new node connected")
 
-	//s.RegisterPeer(peer)
+	for la, pr := range s.Peers {
+		logrus.WithFields(logrus.Fields{
+			"ListenAddress": la,
+			"Peer":          pr,
+		}).Info("Peers after handshake")
+	}
 
 	return nil
 }
 
-func (s *Server) Broadcast(broadcastMsg BroadcastTo) error {
-	msg := NewMessage(s.ListenAddress, broadcastMsg.Payload)
+func (s *Server) Broadcast(broadcastMsg BroadcastTo, Merge bool) error {
+	/*TO delete*/
+	for b, p := range s.Peers {
+		fmt.Printf("Listen Address -> %v\n", b)
+		fmt.Printf("Peer -> %v\n", *p)
+	}
+
+	/*TO delete*/
+	logrus.WithFields(logrus.Fields{
+		"Merge":     Merge,
+		"To":        broadcastMsg.To,
+		"Peer List": s.Peers,
+	}).Info("Broadcasting Message")
+	msg := NewMessage(s.ListenAddress, broadcastMsg.Payload, Merge)
 
 	buf := new(bytes.Buffer)
 	if err := gob.NewEncoder(buf).Encode(msg); err != nil {
@@ -179,13 +225,13 @@ func (s *Server) handshake(p *Peer) (*Handshake, error) {
 	if err := gob.NewDecoder(p.Conn).Decode(hs); err != nil {
 		return nil, err
 	}
+	p.ListenAddr = hs.ListenAddr
 
 	_, ok := s.LastWriterWinsGraph.Clock.Clock[hs.ListenAddr]
 	if !ok {
 		s.LastWriterWinsGraph.Clock.Clock[hs.ListenAddr] = hs.CurrentGraphState.Clock.Clock[hs.ListenAddr]
 	}
 
-	p.ListenAddr = hs.ListenAddr
 	/**This for updating connections in network */
 	ws := &models.WritableServer{}
 	fp, err := utils.CreateOrOpenFileRWMode(utils.AadvcsNetworkConfigFilePath)
@@ -209,26 +255,70 @@ func (s *Server) handshake(p *Peer) (*Handshake, error) {
 	return hs, nil
 }
 
+func (s *Server) handleClockMerge(msg *Message) error {
+	receivedGraph := msg.Payload.(crdt.LastWriterWinsGraph)
+	s.LastWriterWinsGraph.Clock.Merge(receivedGraph.Clock)
+	noOfCommits, err := utils.GetNumberOfChildrenDir(utils.AadvcsCommitDirPath)
+	if err != nil {
+		return err
+	}
+	if noOfCommits > 0 {
+		currentDir := filepath.Join(utils.AadvcsCommitDirPath, fmt.Sprintf("v%v", noOfCommits))
+		fp, err := utils.CreateNestedFile(filepath.Join(currentDir, "graph.json"))
+		jsonData, err := json.MarshalIndent(s.LastWriterWinsGraph, "", "")
+		_, _ = fp.Write(jsonData)
+		err = fp.Close()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (s *Server) handleMessage(msg *Message) error {
+
+	//Reading current state of graph
+	noOfCommits, err := utils.GetNumberOfChildrenDir(utils.AadvcsCommitDirPath)
+	if err != nil {
+		return err
+	}
+	if noOfCommits > 0 {
+		currentDir := filepath.Join(utils.AadvcsCommitDirPath, fmt.Sprintf("v%v", noOfCommits))
+		pth := filepath.Join(currentDir, "graph.json")
+		file, err := os.ReadFile(pth)
+		if err != nil {
+			return err
+		}
+		latestCurrentVersion := crdt.NewLastWriterWinsGraph(s.ListenAddress)
+		err = json.Unmarshal(file, latestCurrentVersion)
+		if err != nil {
+			return err
+		}
+		s.LastWriterWinsGraph = latestCurrentVersion
+	}
+
 	fmt.Printf("%+v\n", msg.Payload)
 	graph := msg.Payload.(crdt.LastWriterWinsGraph)
 
 	eventOrder := s.LastWriterWinsGraph.Clock.Compare(graph.Clock)
 	if eventOrder == clock.HappensAfter {
 		logrus.Info("Incoming event is Latest")
-		err := handleHappensAfter(s.ListenAddress, &graph, s.LastWriterWinsGraph)
+		err := handleHappensAfter(s.ListenAddress, &graph, s.LastWriterWinsGraph, s, msg)
 		if err != nil {
 			return err
 		}
 
 	} else if eventOrder == clock.HappensBefore {
-		handleHappensBefore(&graph, s.LastWriterWinsGraph)
+		handleHappensBefore()
 		logrus.Info("Incoming event is stale and would be discarded")
 	} else if eventOrder == clock.CONCURRENT {
 		handleMerge(&graph, s.LastWriterWinsGraph)
 		logrus.Info("Conflict is there with incoming event. Trying To merge changes...")
 	} else if eventOrder == clock.NotComparable {
 		logrus.Info("2 Events are not comparable")
+	} else if eventOrder == clock.IDENTICAL {
+		logrus.Info("Nodes are eventually consistent")
 	}
 
 	fmt.Printf("After Comparing Clocks")
@@ -246,11 +336,12 @@ func init() {
 	gob.Register(map[string]interface{}{})
 }
 
-func handleHappensAfter(serverAddress string, incomingState *crdt.LastWriterWinsGraph, currentState *crdt.LastWriterWinsGraph) error {
+func handleHappensAfter(serverAddress string, incomingState *crdt.LastWriterWinsGraph, currentState *crdt.LastWriterWinsGraph, s *Server, msg *Message) error {
 	// If incoming event happens after event at the server, then we accept those changes.
 	currentState = incomingState
 	currentState.NodeId = serverAddress
 	// Create directory structure as it was on other node
+	logrus.Info("Creating Directory Structure....")
 	for p, c := range currentState.Paths {
 		file, err := utils.CreateNestedFile(p)
 		if err != nil {
@@ -263,6 +354,7 @@ func handleHappensAfter(serverAddress string, incomingState *crdt.LastWriterWins
 	}
 
 	// now create same directories in commit folder
+	logrus.Info("Creating Commit Structure....")
 	noOfDirectory, err := utils.GetNumberOfChildrenDir(utils.AadvcsCommitDirPath)
 	if err != nil {
 		return err
@@ -299,7 +391,11 @@ func handleHappensAfter(serverAddress string, incomingState *crdt.LastWriterWins
 		}
 	}
 
+	//Increment current clock, as we are processing commit of another node
+	currentState.Clock.NodeId = serverAddress
+	currentState.Clock.Increment()
 	// create graph.json
+	logrus.Info("Creating Graph file....")
 	fp, err := utils.CreateNestedFile(filepath.Join(newCommitDirName, "graph.json"))
 	jsonData, err := json.MarshalIndent(currentState, "", "")
 	_, _ = fp.Write(jsonData)
@@ -307,12 +403,28 @@ func handleHappensAfter(serverAddress string, incomingState *crdt.LastWriterWins
 	if err != nil {
 		return err
 	}
+	s.LastWriterWinsGraph = currentState
+	s.Start()
+	logrus.Info("Dialing to host")
+	time.Sleep(time.Second * 1)
+	err = s.Dial(msg.From)
+	if err != nil {
+		return err
+	}
+	err = s.Broadcast(BroadcastTo{
+		Payload: currentState,
+		To:      []string{msg.From},
+	}, true)
+	if err != nil {
+		return err
+	}
 	return nil
+	//return nil
 }
 
-func handleHappensBefore(incomingState *crdt.LastWriterWinsGraph, currentState *crdt.LastWriterWinsGraph) {
+func handleHappensBefore() {
 	// Here we have to discard the incoming event
-
+	logrus.Info("Incoming event was the older event. Changes will not be applied.")
 }
 
 func handleMerge(incomingState *crdt.LastWriterWinsGraph, currentState *crdt.LastWriterWinsGraph) {

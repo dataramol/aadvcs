@@ -135,7 +135,7 @@ func SendUpdateOverNetwork(LwwGraph *crdt.LastWriterWinsGraph, ws *models.Writab
 	err := newServer.Broadcast(network.BroadcastTo{
 		To:      To,
 		Payload: newServer.LastWriterWinsGraph,
-	})
+	}, false)
 	if err != nil {
 		return err
 	}
