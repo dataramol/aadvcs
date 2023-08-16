@@ -137,10 +137,8 @@ func (lwwGraph *LastWriterWinsGraph) GetRootVertex() *Vertex {
 		vertexMap[vertex] = false
 	}
 
-	for _, vertex := range lwwGraph.Vertices {
-		for _, adjVertex := range vertex.AdjacentVertices {
-			vertexMap[adjVertex] = true
-		}
+	for _, edge := range lwwGraph.Edges {
+		vertexMap[edge.To] = true
 	}
 
 	for vertex, isNotRoot := range vertexMap {
@@ -154,4 +152,41 @@ func (lwwGraph *LastWriterWinsGraph) GetRootVertex() *Vertex {
 
 func (lwwGraph *LastWriterWinsGraph) Merge(other *LastWriterWinsGraph) {
 
+}
+
+func DeepCopy(destination *LastWriterWinsGraph, source *LastWriterWinsGraph) *LastWriterWinsGraph {
+	if source == nil || destination == nil {
+		return nil
+	}
+
+	var copiedVertices []*Vertex
+	for _, v := range source.Vertices {
+		copiedV := *v
+		copiedVertices = append(copiedVertices, &copiedV)
+	}
+
+	var copiedEdges []*Edge
+	for _, e := range source.Edges {
+		copiedE := *e
+		copiedEdges = append(copiedEdges, &copiedE)
+	}
+
+	copiedPaths := make(map[string]string)
+	for k, v := range source.Paths {
+		copiedPaths[k] = v
+	}
+
+	copiedCommit := &models.CommitModel{
+		CommitMsg:     source.LatestCommit.CommitMsg,
+		CommitVersion: source.LatestCommit.CommitVersion,
+		ParentCommit:  source.LatestCommit.ParentCommit,
+	}
+
+	destination.Vertices = copiedVertices
+	destination.Edges = copiedEdges
+	destination.Paths = copiedPaths
+	destination.LatestCommit = copiedCommit
+	destination.TimeStamp = source.TimeStamp
+
+	return destination
 }

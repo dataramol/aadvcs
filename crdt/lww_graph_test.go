@@ -23,17 +23,26 @@ func TestLWWGraph(t *testing.T) {
 		Content:  "123234356",
 		FileName: "file2.txt",
 	}
+	val5 := models.Tree{
+		FileName: "bin",
+	}
+	val6 := models.Blob{
+		Content:  "abceddas",
+		FileName: "file3.txt",
+	}
 
 	lwwGraph.AddVertex(val1, Tree)
 	lwwGraph.AddVertex(val2, Blob)
 	lwwGraph.AddVertex(val3, Tree)
 	lwwGraph.AddVertex(val4, Blob)
+	lwwGraph.AddVertex(val5, Tree)
+	lwwGraph.AddVertex(val6, Blob)
 
 	lwwGraph.AddEdge(lwwGraph.GetVertexByFilePath("file1.txt", Blob), lwwGraph.GetVertexByFilePath("dir", Tree))
 	lwwGraph.AddEdge(lwwGraph.GetVertexByFilePath("lib", Tree), lwwGraph.GetVertexByFilePath("dir", Tree))
 	lwwGraph.AddEdge(lwwGraph.GetVertexByFilePath("file2.txt", Blob), lwwGraph.GetVertexByFilePath("lib", Tree))
-
-	lwwGraph.PrintGraph()
+	lwwGraph.AddEdge(lwwGraph.GetVertexByFilePath("file3.txt", Blob), lwwGraph.GetVertexByFilePath("bin", Tree))
+	lwwGraph.AddEdge(lwwGraph.GetVertexByFilePath("bin", Tree), lwwGraph.GetVertexByFilePath("dir", Tree))
 
 	rootVtx := lwwGraph.GetRootVertex()
 
@@ -49,5 +58,7 @@ func TestLWWGraph(t *testing.T) {
 
 	lwwGraph.AddEdge(rootVtx, lwwGraph.GetVertexByValue(commitModel, Commit))
 
-	fmt.Printf("Root Vertex After Commit is %v", rootVtx)
+	lwwGraph.PrintGraph()
+
+	fmt.Printf("Root Vertex After Commit is %v", lwwGraph.GetRootVertex())
 }

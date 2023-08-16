@@ -16,7 +16,6 @@ import (
 //var lwwGraph = crdt.NewLastWriterWinsGraph("node1")
 
 func createLWWGraph(commitMsg string, ws *models.WritableServer) (error, *crdt.LastWriterWinsGraph) {
-
 	LwwGraph = crdt.NewLastWriterWinsGraph(ws.ListAddr)
 	noOfCommits, err := utils.GetNumberOfChildrenDir(utils.AadvcsCommitDirPath)
 	if err != nil {
@@ -26,6 +25,9 @@ func createLWWGraph(commitMsg string, ws *models.WritableServer) (error, *crdt.L
 		err := createGraphForFirstCommit(commitMsg)
 		if err != nil {
 			return err, nil
+		}
+		for _, conn := range ws.Connections {
+			LwwGraph.Clock.Clock[conn] = 0
 		}
 	} else {
 		currentDir := filepath.Join(utils.AadvcsCommitDirPath, fmt.Sprintf("v%v", noOfCommits-1))
@@ -55,7 +57,12 @@ func createLWWGraph(commitMsg string, ws *models.WritableServer) (error, *crdt.L
 		LwwGraph.PrintGraph()
 
 		color.Magenta("After Printing Graph")
+
+		for _, conn := range ws.Connections {
+			LwwGraph.Clock.Clock[conn] = prevCommitGraph.Clock.Clock[conn]
+		}
 	}
+
 	return nil, LwwGraph
 }
 
@@ -95,8 +102,6 @@ func createGraphForNonFirstCommit(commitMsg string, previousCommitGraph *crdt.La
 			}
 			color.Magenta("Previous From -> %T", prevFrom)
 			if currFrom = LwwGraph.GetVertexByValue(treeModel, crdt.Tree); currFrom == nil {
-				//lwwGraph.AddVertex(prevFrom.Value, crdt.Tree)
-				//currFrom = lwwGraph.GetVertexByValue(prevFrom.Value.(models.Tree), crdt.Tree)
 				currFrom = prevFrom
 				LwwGraph.AddVtx(currFrom)
 			}
@@ -110,8 +115,6 @@ func createGraphForNonFirstCommit(commitMsg string, previousCommitGraph *crdt.La
 				return err
 			}
 			if currTo = LwwGraph.GetVertexByValue(treeModel, crdt.Tree); currTo == nil {
-				//lwwGraph.AddVertex(prevTo.Value, crdt.Tree)
-				//currTo = lwwGraph.GetVertexByValue(prevTo.Value.(models.Tree), crdt.Tree)
 				currTo = prevTo
 				LwwGraph.AddVtx(currTo)
 			}
@@ -123,8 +126,6 @@ func createGraphForNonFirstCommit(commitMsg string, previousCommitGraph *crdt.La
 				return err
 			}
 			if currTo = LwwGraph.GetVertexByFilePath(blobModel.FileName, crdt.Blob); currTo == nil {
-				//lwwGraph.AddVertex(prevTo.Value, crdt.Blob)
-				//currTo = lwwGraph.GetVertexByValue(prevTo.Value.(models.Blob), crdt.Blob)
 				currTo = prevTo
 				LwwGraph.AddVtx(currTo)
 			}
@@ -133,13 +134,6 @@ func createGraphForNonFirstCommit(commitMsg string, previousCommitGraph *crdt.La
 		if currFrom != nil && currTo != nil && currFrom.ModType != crdt.Commit && !LwwGraph.EdgeExists(currFrom, currTo) {
 			LwwGraph.AddEdge(currTo, currFrom)
 		}
-
-		/*prevRootVtx := previousCommitGraph.GetRootVertex()
-		if prevRootVtx.ModType == crdt.Commit {
-			prevCommitModel := prevRootVtx.Value.(models.CommitModel).ParentCommit
-			prevCommitModel.ParentCommit = &currCommitModel
-		}*/
-
 	}
 
 	currRootVtx := LwwGraph.GetRootVertex()

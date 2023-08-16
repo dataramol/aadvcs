@@ -9,12 +9,12 @@ import (
 	"github.com/dataramol/aadvcs/crdt"
 	"github.com/dataramol/aadvcs/models"
 	"github.com/dataramol/aadvcs/utils"
+	"github.com/mitchellh/mapstructure"
 	"github.com/sirupsen/logrus"
 	"io"
 	"net"
 	"os"
 	"path/filepath"
-	"time"
 )
 
 type Server struct {
@@ -107,21 +107,8 @@ func (s *Server) loop() {
 				logrus.Errorf("handle peer error: %s", err)
 			}
 		case msg := <-s.MsgCh:
-			logrus.WithFields(logrus.Fields{
-				"Merge":   msg.Merge,
-				"From":    msg.From,
-				"Payload": msg.Payload,
-			})
-			if msg.Merge {
-				logrus.Info("Merging clock..")
-				err := s.handleClockMerge(msg)
-				if err != nil {
-					return
-				}
-			} else {
-				if err := s.handleMessage(msg); err != nil {
-					logrus.Errorf("Error while handling msg : %s", err)
-				}
+			if err := s.handleMessage(msg); err != nil {
+				logrus.Errorf("Error while handling msg : %s", err)
 			}
 		}
 	}
@@ -255,27 +242,6 @@ func (s *Server) handshake(p *Peer) (*Handshake, error) {
 	return hs, nil
 }
 
-func (s *Server) handleClockMerge(msg *Message) error {
-	receivedGraph := msg.Payload.(crdt.LastWriterWinsGraph)
-	s.LastWriterWinsGraph.Clock.Merge(receivedGraph.Clock)
-	noOfCommits, err := utils.GetNumberOfChildrenDir(utils.AadvcsCommitDirPath)
-	if err != nil {
-		return err
-	}
-	if noOfCommits > 0 {
-		currentDir := filepath.Join(utils.AadvcsCommitDirPath, fmt.Sprintf("v%v", noOfCommits))
-		fp, err := utils.CreateNestedFile(filepath.Join(currentDir, "graph.json"))
-		jsonData, err := json.MarshalIndent(s.LastWriterWinsGraph, "", "")
-		_, _ = fp.Write(jsonData)
-		err = fp.Close()
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func (s *Server) handleMessage(msg *Message) error {
 
 	//Reading current state of graph
@@ -304,6 +270,7 @@ func (s *Server) handleMessage(msg *Message) error {
 	eventOrder := s.LastWriterWinsGraph.Clock.Compare(graph.Clock)
 	if eventOrder == clock.HappensAfter {
 		logrus.Info("Incoming event is Latest")
+		s.LastWriterWinsGraph.Clock.Merge(graph.Clock)
 		err := handleHappensAfter(s.ListenAddress, &graph, s.LastWriterWinsGraph, s, msg)
 		if err != nil {
 			return err
@@ -338,8 +305,10 @@ func init() {
 
 func handleHappensAfter(serverAddress string, incomingState *crdt.LastWriterWinsGraph, currentState *crdt.LastWriterWinsGraph, s *Server, msg *Message) error {
 	// If incoming event happens after event at the server, then we accept those changes.
-	currentState = incomingState
-	currentState.NodeId = serverAddress
+
+	//Deep copying edges, vertices, paths, latestCommit and timestamp
+	currentState = crdt.DeepCopy(currentState, incomingState)
+
 	// Create directory structure as it was on other node
 	logrus.Info("Creating Directory Structure....")
 	for p, c := range currentState.Paths {
@@ -359,7 +328,7 @@ func handleHappensAfter(serverAddress string, incomingState *crdt.LastWriterWins
 	if err != nil {
 		return err
 	}
-	commitVtx := incomingState.LatestCommit
+	commitVtx := currentState.LatestCommit
 	newCommitDirName := filepath.Join(utils.AadvcsCommitDirPath, fmt.Sprintf("v%v", noOfDirectory+1))
 	commitMetadataFP, err := utils.CreateNestedFile(filepath.Join(newCommitDirName, utils.AadvcsCommitMetadataFile))
 	if err != nil {
@@ -391,11 +360,9 @@ func handleHappensAfter(serverAddress string, incomingState *crdt.LastWriterWins
 		}
 	}
 
-	//Increment current clock, as we are processing commit of another node
-	currentState.Clock.NodeId = serverAddress
-	currentState.Clock.Increment()
 	// create graph.json
 	logrus.Info("Creating Graph file....")
+
 	fp, err := utils.CreateNestedFile(filepath.Join(newCommitDirName, "graph.json"))
 	jsonData, err := json.MarshalIndent(currentState, "", "")
 	_, _ = fp.Write(jsonData)
@@ -404,22 +371,8 @@ func handleHappensAfter(serverAddress string, incomingState *crdt.LastWriterWins
 		return err
 	}
 	s.LastWriterWinsGraph = currentState
-	s.Start()
-	logrus.Info("Dialing to host")
-	time.Sleep(time.Second * 1)
-	err = s.Dial(msg.From)
-	if err != nil {
-		return err
-	}
-	err = s.Broadcast(BroadcastTo{
-		Payload: currentState,
-		To:      []string{msg.From},
-	}, true)
-	if err != nil {
-		return err
-	}
+
 	return nil
-	//return nil
 }
 
 func handleHappensBefore() {
@@ -428,5 +381,28 @@ func handleHappensBefore() {
 }
 
 func handleMerge(incomingState *crdt.LastWriterWinsGraph, currentState *crdt.LastWriterWinsGraph) {
+	for _, edge := range incomingState.Edges {
+		to := edge.To
+		from := edge.From
+		switch from.ModType {
+		case crdt.Commit:
 
+		case crdt.Tree:
+			var treeModel models.Tree
+			err := mapstructure.Decode(from, &treeModel)
+			if err != nil {
+				return
+			}
+			currentVtx := currentState.GetVertexByValue(treeModel, crdt.Tree)
+			if currentVtx == nil {
+				currentState.AddVertex(treeModel, crdt.Tree)
+			}
+		}
+		switch to.ModType {
+		case crdt.Blob:
+		case crdt.Tree:
+		case crdt.Commit:
+		}
+
+	}
 }

@@ -69,7 +69,7 @@ func runCommitCommand(trackedFilePath, msg string) error {
 	stagingFilePtr, _ := utils.CreateOrOpenFileRWMode(utils.StagingAreaFile)
 	defer stagingFilePtr.Close()
 
-	ws := getNetworkConfig()
+	ws := GetNetworkConfig()
 
 	err, LwwGraph = createLWWGraph(msg, ws)
 	color.Red("Error After Graph Creation :- %v", err)
@@ -89,7 +89,11 @@ func runCommitCommand(trackedFilePath, msg string) error {
 		}
 		err = SendUpdateOverNetwork(LwwGraph, ws)
 		if err != nil {
-			return err
+			logrus.WithFields(logrus.Fields{
+				"LWWGraph": LwwGraph,
+				"Network":  ws,
+				"Error":    err,
+			}).Error("Failed to send update over network")
 		}
 	}
 
@@ -145,7 +149,7 @@ func SendUpdateOverNetwork(LwwGraph *crdt.LastWriterWinsGraph, ws *models.Writab
 	return nil
 }
 
-func getNetworkConfig() *models.WritableServer {
+func GetNetworkConfig() *models.WritableServer {
 	file, err := os.ReadFile(utils.AadvcsNetworkConfigFilePath)
 	ws := &models.WritableServer{}
 	err = json.Unmarshal(file, ws)
