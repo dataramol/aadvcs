@@ -40,7 +40,7 @@ func createLWWGraph(commitMsg string, ws *models.WritableServer) (error, *crdt.L
 			color.Red("Err While Reading -> %v", err)
 			return err, nil
 		}
-		prevCommitGraph := crdt.NewLastWriterWinsGraph("node1")
+		prevCommitGraph := &crdt.LastWriterWinsGraph{}
 		err = json.Unmarshal(file, prevCommitGraph)
 		if err != nil {
 			color.Red("Err While Unmarshalling -> %v", err)
@@ -102,7 +102,10 @@ func createGraphForNonFirstCommit(commitMsg string, previousCommitGraph *crdt.La
 			}
 			color.Magenta("Previous From -> %T", prevFrom)
 			if currFrom = LwwGraph.GetVertexByValue(treeModel, crdt.Tree); currFrom == nil {
-				currFrom = prevFrom
+				err = mapstructure.Decode(prevFrom.Value, &treeModel)
+				currFrom = &crdt.Vertex{}
+				currFrom.Value = treeModel
+				currFrom.ModType = crdt.Tree
 				LwwGraph.AddVtx(currFrom)
 			}
 		}
@@ -115,7 +118,10 @@ func createGraphForNonFirstCommit(commitMsg string, previousCommitGraph *crdt.La
 				return err
 			}
 			if currTo = LwwGraph.GetVertexByValue(treeModel, crdt.Tree); currTo == nil {
-				currTo = prevTo
+				err = mapstructure.Decode(prevTo.Value, &treeModel)
+				currTo = &crdt.Vertex{}
+				currTo.Value = treeModel
+				currTo.ModType = crdt.Tree
 				LwwGraph.AddVtx(currTo)
 			}
 		} else if prevTo.ModType == crdt.Blob {
@@ -126,7 +132,10 @@ func createGraphForNonFirstCommit(commitMsg string, previousCommitGraph *crdt.La
 				return err
 			}
 			if currTo = LwwGraph.GetVertexByFilePath(blobModel.FileName, crdt.Blob); currTo == nil {
-				currTo = prevTo
+				err = mapstructure.Decode(prevTo.Value, &blobModel)
+				currTo = &crdt.Vertex{}
+				currTo.Value = blobModel
+				currTo.ModType = crdt.Blob
 				LwwGraph.AddVtx(currTo)
 			}
 		}
