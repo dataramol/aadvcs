@@ -23,6 +23,7 @@ type Vertex struct {
 	Value            interface{}
 	AdjacentVertices []*Vertex
 	ModType          ModelType
+	TimeStamp        time.Time
 }
 
 type Edge struct {
@@ -58,13 +59,17 @@ func (lwwGraph *LastWriterWinsGraph) AddVertex(Val interface{}, ModType ModelTyp
 	defer lwwGraph.mu.Unlock()
 
 	vertex := Vertex{
-		Value:   Val,
-		ModType: ModType,
+		Value:     Val,
+		ModType:   ModType,
+		TimeStamp: time.Now(),
 	}
 	lwwGraph.Vertices = append(lwwGraph.Vertices, &vertex)
 }
 
 func (lwwGraph *LastWriterWinsGraph) AddVtx(vtx *Vertex) {
+	if vtx.TimeStamp.IsZero() {
+		vtx.TimeStamp = time.Now()
+	}
 	lwwGraph.Vertices = append(lwwGraph.Vertices, vtx)
 }
 
@@ -105,9 +110,11 @@ func (lwwGraph *LastWriterWinsGraph) GetVertexByValue(targetValue interface{}, m
 
 func (lwwGraph *LastWriterWinsGraph) GetVertexByFilePath(filePath string, modType ModelType) *Vertex {
 	var blobModel models.Blob
+	var treeModel models.Tree
 	for _, vertex := range lwwGraph.Vertices {
 		if modType == vertex.ModType && modType == Tree {
-			if vertex.Value.(models.Tree).FileName == filePath {
+			mapstructure.Decode(vertex.Value, &treeModel)
+			if treeModel.FileName == filePath {
 				return vertex
 			}
 		} else if modType == vertex.ModType && modType == Blob {
@@ -123,7 +130,7 @@ func (lwwGraph *LastWriterWinsGraph) GetVertexByFilePath(filePath string, modTyp
 
 func (lwwGraph *LastWriterWinsGraph) EdgeExists(from *Vertex, to *Vertex) bool {
 	for _, edge := range lwwGraph.Edges {
-		if edge.From == from && edge.To == to {
+		if convertValueMapToStruct(edge.From) == convertValueMapToStruct(from) && convertValueMapToStruct(edge.To) == convertValueMapToStruct(to) {
 			return true
 		}
 	}
@@ -148,10 +155,6 @@ func (lwwGraph *LastWriterWinsGraph) GetRootVertex() *Vertex {
 	}
 
 	return nil
-}
-
-func (lwwGraph *LastWriterWinsGraph) Merge(other *LastWriterWinsGraph) {
-
 }
 
 func DeepCopy(destination *LastWriterWinsGraph, source *LastWriterWinsGraph) *LastWriterWinsGraph {
@@ -189,4 +192,23 @@ func DeepCopy(destination *LastWriterWinsGraph, source *LastWriterWinsGraph) *La
 	destination.TimeStamp = source.TimeStamp
 
 	return destination
+}
+
+func convertValueMapToStruct(V *Vertex) any {
+	var treeModel models.Tree
+	var blobModel models.Blob
+	var commitModel models.CommitModel
+
+	if V.ModType == Tree {
+		mapstructure.Decode(V.Value, &treeModel)
+		return treeModel
+	} else if V.ModType == Blob {
+		mapstructure.Decode(V.Value, &blobModel)
+		return blobModel
+	} else if V.ModType == Commit {
+		mapstructure.Decode(V.Value, &commitModel)
+		return commitModel
+	}
+
+	return fmt.Errorf("unknow value type received : %v", V.ModType)
 }

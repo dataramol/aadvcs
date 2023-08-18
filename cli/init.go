@@ -17,18 +17,6 @@ var (
 	Server   *network.Server
 )
 
-/*
-const (
-	aadvcsRootDirName           = ".aadvcs"
-	aadvcsCommitDirPath         = ".aadvcs/commit"
-	aadvcsCheckoutDirPath       = ".aadvcs/checkout"
-	aadvcsStatusFilePath        = ".aadvcs/status.txt"
-	aadvcsStagingFilePath       = ".aadvcs/staging_area.txt"
-	AadvcsNetworkConfigFilePath = ".aadvcs/network.json"
-	aadvcsTimeFormat            = "2006-01-02 03:04:05"
-	aadvcsCommitMetadataFile    = "metadata.txt"
-)*/
-
 func init() {
 	initCmd.Flags().StringP("port", "p", "", "Port for server to run")
 	initCmd.Flags().BoolP("start", "s", false, "Start the server")
@@ -66,7 +54,6 @@ func runInitCommand(port string, startServer bool) error {
 	}
 
 	color.Green("Repository initialised, files are within .aadvcs directory")
-	fmt.Printf("Start Server -> %v", startServer)
 	if port != "" {
 		fp, err := utils.CreateNestedFile(utils.AadvcsNetworkConfigFilePath)
 		if err != nil {

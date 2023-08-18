@@ -122,13 +122,23 @@ func SendUpdateOverNetwork(LwwGraph *crdt.LastWriterWinsGraph, ws *models.Writab
 	go newServer.Start()
 	time.Sleep(time.Millisecond * 200)
 
+	newWs := &models.WritableServer{}
+	newWs.ListAddr = ws.ListAddr
 	for _, connection := range ws.Connections {
 		fmt.Printf("Dialing %v", connection)
 		err := newServer.Dial(connection)
+
 		if err != nil {
-			return err
+			newWs.Connections = append(newWs.Connections, connection)
 		}
 		time.Sleep(time.Second * 2)
+	}
+
+	if len(newWs.Connections) > 0 {
+		fp, _ := utils.CreateOrOpenFileRWMode(utils.AadvcsNetworkCommunicationFilePath)
+		_ = utils.ClearFileContent(fp)
+		data, _ := json.Marshal(newWs)
+		fp.Write(data)
 	}
 
 	To := make([]string, len(ws.Connections))

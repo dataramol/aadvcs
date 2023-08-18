@@ -15,6 +15,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 type Server struct {
@@ -80,7 +81,7 @@ func (s *Server) SendHandshake(p *Peer) error {
 }
 
 func (s *Server) Dial(addr string) error {
-	conn, err := net.Dial("tcp", addr)
+	conn, err := net.DialTimeout("tcp", addr, 1*time.Second)
 	if err != nil {
 		return err
 	}
@@ -271,7 +272,7 @@ func (s *Server) handleMessage(msg *Message) error {
 	if eventOrder == clock.HappensAfter {
 		logrus.Info("Incoming event is Latest")
 		s.LastWriterWinsGraph.Clock.Merge(graph.Clock)
-		err := handleHappensAfter(s.ListenAddress, &graph, s.LastWriterWinsGraph, s, msg)
+		err := handleHappensAfter(&graph, s.LastWriterWinsGraph, s)
 		if err != nil {
 			return err
 		}
@@ -280,8 +281,12 @@ func (s *Server) handleMessage(msg *Message) error {
 		handleHappensBefore()
 		logrus.Info("Incoming event is stale and would be discarded")
 	} else if eventOrder == clock.CONCURRENT {
-		handleMerge(&graph, s.LastWriterWinsGraph)
 		logrus.Info("Conflict is there with incoming event. Trying To merge changes...")
+		s.LastWriterWinsGraph.Clock.Merge(graph.Clock)
+		err := HandleMerge(&graph, s.LastWriterWinsGraph, s)
+		if err != nil {
+			return err
+		}
 	} else if eventOrder == clock.NotComparable {
 		logrus.Info("2 Events are not comparable")
 	} else if eventOrder == clock.IDENTICAL {
@@ -303,7 +308,7 @@ func init() {
 	gob.Register(map[string]interface{}{})
 }
 
-func handleHappensAfter(serverAddress string, incomingState *crdt.LastWriterWinsGraph, currentState *crdt.LastWriterWinsGraph, s *Server, msg *Message) error {
+func handleHappensAfter(incomingState *crdt.LastWriterWinsGraph, currentState *crdt.LastWriterWinsGraph, s *Server) error {
 	// If incoming event happens after event at the server, then we accept those changes.
 
 	//Deep copying edges, vertices, paths, latestCommit and timestamp
@@ -380,29 +385,152 @@ func handleHappensBefore() {
 	logrus.Info("Incoming event was the older event. Changes will not be applied.")
 }
 
-func handleMerge(incomingState *crdt.LastWriterWinsGraph, currentState *crdt.LastWriterWinsGraph) {
+func HandleMerge(incomingState *crdt.LastWriterWinsGraph, currentState *crdt.LastWriterWinsGraph, s *Server) error {
 	for _, edge := range incomingState.Edges {
 		to := edge.To
 		from := edge.From
+		var currFrom *crdt.Vertex
+		var currTo *crdt.Vertex
 		switch from.ModType {
 		case crdt.Commit:
-
 		case crdt.Tree:
 			var treeModel models.Tree
-			err := mapstructure.Decode(from, &treeModel)
+			err := mapstructure.Decode(from.Value, &treeModel)
 			if err != nil {
-				return
+				return err
 			}
-			currentVtx := currentState.GetVertexByValue(treeModel, crdt.Tree)
+			currentVtx := currentState.GetVertexByFilePath(treeModel.FileName, crdt.Tree)
 			if currentVtx == nil {
 				currentState.AddVertex(treeModel, crdt.Tree)
 			}
+
+			currFrom = currentState.GetVertexByFilePath(treeModel.FileName, crdt.Tree)
 		}
 		switch to.ModType {
 		case crdt.Blob:
+			var blobModel models.Blob
+			err := mapstructure.Decode(to.Value, &blobModel)
+			if err != nil {
+				return err
+			}
+			currentVtx := currentState.GetVertexByFilePath(blobModel.FileName, crdt.Blob)
+			if currentVtx == nil {
+				currentState.AddVertex(blobModel, crdt.Blob)
+			} else if currentVtx.TimeStamp.Before(to.TimeStamp) {
+				currentVtx.Value = blobModel
+				currentVtx.TimeStamp = to.TimeStamp
+			}
+			currTo = currentState.GetVertexByFilePath(blobModel.FileName, crdt.Blob)
+
 		case crdt.Tree:
+			var treeModel models.Tree
+			err := mapstructure.Decode(to.Value, &treeModel)
+			if err != nil {
+				return err
+			}
+			currentVtx := currentState.GetVertexByFilePath(treeModel.FileName, crdt.Tree)
+			if currentVtx == nil {
+				currentState.AddVertex(treeModel, crdt.Tree)
+			}
+			currTo = currentState.GetVertexByFilePath(treeModel.FileName, crdt.Tree)
 		case crdt.Commit:
 		}
-
+		if currFrom != nil && currTo != nil && !currentState.EdgeExists(currFrom, currTo) {
+			currentState.AddEdge(currTo, currFrom)
+		}
 	}
+	rootVtx := currentState.GetRootVertex()
+	currCommitModel := models.CommitModel{
+		CommitMsg:     "Merge commit",
+		ParentCommit:  nil,
+		CommitVersion: currentState.LatestCommit.CommitVersion + 1,
+	}
+
+	currentState.LatestCommit = &currCommitModel
+
+	currentState.AddVertex(currCommitModel, crdt.Commit)
+	currentState.AddEdge(rootVtx, currentState.GetVertexByValue(currCommitModel, crdt.Commit))
+
+	logrus.Info("Creating Directory Structure....")
+	paths := make(map[string]string)
+	for p := range incomingState.Paths {
+		fmt.Printf("FilePath Base --> %v", filepath.Base(p))
+		currentState.PrintGraph()
+		vtx := currentState.GetVertexByFilePath(filepath.Base(p), crdt.Blob)
+		var blob models.Blob
+		mapstructure.Decode(vtx.Value, &blob)
+		paths[p] = blob.Content
+	}
+	for p := range currentState.Paths {
+		vtx := currentState.GetVertexByFilePath(filepath.Base(p), crdt.Blob)
+		if _, exists := paths[p]; !exists {
+			var blob models.Blob
+			mapstructure.Decode(vtx.Value, &blob)
+			paths[p] = blob.Content
+		}
+	}
+
+	currentState.Paths = paths
+
+	for p, c := range paths {
+		file, err := utils.CreateNestedFile(p)
+		if err != nil {
+			return err
+		}
+		_, err = file.Write([]byte(c))
+		if err != nil {
+			return err
+		}
+	}
+
+	logrus.Info("Creating Commit Structure....")
+	noOfDirectory, err := utils.GetNumberOfChildrenDir(utils.AadvcsCommitDirPath)
+	if err != nil {
+		return err
+	}
+	newCommitDirName := filepath.Join(utils.AadvcsCommitDirPath, fmt.Sprintf("v%v", noOfDirectory+1))
+	commitMetadataFP, err := utils.CreateNestedFile(filepath.Join(newCommitDirName, utils.AadvcsCommitMetadataFile))
+	if err != nil {
+		return err
+	}
+	defer func(commitMetadataFP *os.File) {
+		err := commitMetadataFP.Close()
+		if err != nil {
+
+		}
+	}(commitMetadataFP)
+
+	_, _ = commitMetadataFP.WriteString(fmt.Sprintf("%v%v%v", currCommitModel.CommitMsg, utils.Separator, currentState.TimeStamp.Format(utils.AadvcsTimeFormat)))
+
+	for p := range currentState.Paths {
+		destCommitFilePath := filepath.Join(newCommitDirName, p)
+
+		destFilePtr, _ := utils.CreateNestedFile(destCommitFilePath)
+		originalFilePtr, _ := os.Open(p)
+		_, _ = io.Copy(destFilePtr, originalFilePtr)
+
+		err = destFilePtr.Close()
+		if err != nil {
+			return err
+		}
+		err = originalFilePtr.Close()
+		if err != nil {
+			return err
+		}
+	}
+
+	// create graph.json
+	logrus.Info("Creating Graph file....")
+
+	fp, err := utils.CreateNestedFile(filepath.Join(newCommitDirName, "graph.json"))
+	jsonData, err := json.MarshalIndent(currentState, "", "")
+	_, _ = fp.Write(jsonData)
+	err = fp.Close()
+	if err != nil {
+		return err
+	}
+
+	s.LastWriterWinsGraph = currentState
+
+	return nil
 }
